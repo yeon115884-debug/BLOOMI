@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BLOOMI (블루미) — 내 손안의 꽃잎 호흡 & AI 웰니스 키링</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Tone.js for gentle meditative chimes -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans KR"', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            cream: '#FAF8F5',
+            blush: {
+              light: '#FDECEF',
+              DEFAULT: '#F4A6B8',
+              dark: '#E07A94',
+            },
+            sage: {
+              light: '#EDF5EE',
+              DEFAULT: '#8FB996',
+              dark: '#6A9972',
+            },
+            lavender: {
+              light: '#F2F1FC',
+              DEFAULT: '#B8B5E8',
+              dark: '#8C88CE',
+            },
+            charcoal: '#2C2A2E',
+          },
+          boxShadow: {
+            soft: '0 10px 35px -5px rgba(44, 42, 46, 0.06)',
+            glowPink: '0 0 35px rgba(244, 166, 184, 0.55)',
+            glowMint: '0 0 35px rgba(143, 185, 150, 0.55)',
+            glowLavender: '0 0 35px rgba(184, 181, 232, 0.6)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #FAF8F5;
+      color: #2C2A2E;
+      font-family: 'Noto Sans KR', 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+
+    .flower-container {
+      transition: transform 4s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    .petal-layer {
+      transform-origin: 150px 150px;
+      transition: transform 4s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    .led-pixel {
+      transition: fill 0.6s ease, opacity 0.6s ease, filter 0.6s ease;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #FAF8F5;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #DCD7D0;
+      border-radius: 999px;
+    }
+
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+    .animate-float {
+      animation: floatSlow 4.5s ease-in-out infinite;
+    }
+
+    .tactile-btn:active, .tactile-btn.pressed {
+      transform: scale(0.92) translateY(2px);
+      box-shadow: inset 0 2px 5px rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-blush-light selection:text-charcoal">
+
+  <!-- Toast Notification Box -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-40 glass-card border-b border-stone-200/70">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('studio')">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blush to-lavender flex items-center justify-center shadow-sm">
+          <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C13.8 2 15.2 3.6 15 5.4C16.8 4.8 18.8 5.9 19.3 7.7C19.8 9.5 18.7 11.4 16.9 11.9C18.5 12.9 19 15 18 16.6C17 18.2 14.9 18.7 13.3 17.7C13.3 19.6 11.8 21.1 9.9 21.1C8 21.1 6.5 19.6 6.5 17.7C4.9 18.7 2.8 18.2 1.8 16.6C0.8 15 1.3 12.9 2.9 11.9C1.1 11.4 0 9.5 0.5 7.7C1 5.9 3 4.8 4.8 5.4C4.6 3.6 6 2 7.8 2C9.2 2 10.4 2.8 10.9 4C11.4 2.8 12.6 2 14 2H12Z" transform="translate(2, 0.5) scale(0.92)"/>
+            <circle cx="12" cy="11.5" r="2.6" fill="#FAF8F5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-lg tracking-tight text-charcoal">BLOOMI</span>
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blush-light text-blush-dark">CALM KEY</span>
+          </div>
+          <p class="text-[11px] text-stone-500 hidden sm:block">Physical · AI · Data 기반 스마트 호흡 키링</p>
+        </div>
+      </div>
+
+      <!-- Desktop Navigation Tabs -->
+      <nav class="hidden md:flex items-center gap-1 bg-stone-100/80 p-1 rounded-2xl border border-stone-200/60">
+        <button onclick="switchTab('studio')" id="nav-studio" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-white text-charcoal shadow-sm">
+          🌸 실시간 호흡 스튜디오
+        </button>
+        <button onclick="switchTab('ai')" id="nav-ai" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:text-charcoal transition-all">
+          ✨ AI 마음 케어
+        </button>
+        <button onclick="switchTab('report')" id="nav-report" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:text-charcoal transition-all">
+          📊 웰니스 기록 & 리포트
+        </button>
+        <button onclick="switchTab('about')" id="nav-about" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:text-charcoal transition-all">
+          🔌 기획 & 하드웨어 구조
+        </button>
+      </nav>
+
+      <!-- Hardware Connection Status Pill -->
+      <div class="flex items-center gap-2">
+        <button id="serial-connect-btn" onclick="toggleWebSerial()" class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-charcoal text-white hover:bg-stone-800 transition-all shadow-sm">
+          <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="connection-label">XIAO USB 연결</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Bar -->
+    <div class="md:hidden flex overflow-x-auto gap-1.5 px-4 py-2 border-t border-stone-200/60 bg-white/60">
+      <button onclick="switchTab('studio')" id="m-nav-studio" class="m-nav-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-charcoal text-white">
+        🌸 호흡 스튜디오
+      </button>
+      <button onclick="switchTab('ai')" id="m-nav-ai" class="m-nav-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-stone-100 text-stone-600">
+        ✨ AI 마음 케어
+      </button>
+      <button onclick="switchTab('report')" id="m-nav-report" class="m-nav-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-stone-100 text-stone-600">
+        📊 웰니스 리포트
+      </button>
+      <button onclick="switchTab('about')" id="m-nav-about" class="m-nav-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-stone-100 text-stone-600">
+        🔌 하드웨어 & 기획
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: LIVE BREATHING & BIOMETRIC STUDIO                              -->
+    <!-- ===================================================================== -->
+    <section id="tab-studio" class="tab-content space-y-6">
+
+      <!-- Mode & Status Banner -->
+      <div class="glass-card rounded-3xl p-4 sm:p-5 shadow-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-2xl bg-sage-light text-sage-dark flex items-center justify-center shrink-0">
+            <i data-lucide="activity" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h1 class="font-bold text-base sm:text-lg text-charcoal">BLOOMI 실시간 호흡 & 생체신호 스튜디오</h1>
+              <span id="data-source-badge" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-lavender-light text-lavender-dark">
+                시뮬레이션 모드 활성
+              </span>
+            </div>
+            <p class="text-xs text-stone-500 mt-0.5">
+              키링의 <strong>택트 스위치(D8)</strong>를 누르거나 화면의 버튼을 클릭해 스마트폰 없이 바로 호흡을 시작하세요.
+            </p>
+          </div>
+        </div>
+
+        <!-- Simulation Scenario Selector & Sound Toggle -->
+        <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+          <button id="sound-toggle-btn" onclick="toggleAudioGuide()" class="px-3 py-2 rounded-xl text-xs font-medium bg-stone-100 hover:bg-stone-200 text-charcoal flex items-center gap-1.5 transition-all">
+            <i id="sound-icon" data-lucide="volume-2" class="w-4 h-4 text-sage-dark"></i>
+            <span id="sound-label">사운드 안내 켜짐</span>
+          </button>
+          <select id="sim-scenario" onchange="changeSimScenario(this.value)" class="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 text-charcoal focus:outline-none focus:ring-2 focus:ring-blush">
+            <option value="tense">😰 시뮬레이션: 시험·면접 직전 긴장</option>
+            <option value="normal">🙂 시뮬레이션: 일상 업무 상태</option>
+            <option value="relaxed">🌿 시뮬레이션: 호흡 후 깊은 이완</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Main Studio Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT COLUMN: Interactive BLOOMI Flower Keychain Hardware Simulator (5 cols) -->
+        <div class="lg:col-span-5 glass-card rounded-3xl p-6 shadow-soft flex flex-col items-center justify-between relative overflow-hidden">
+          <!-- Ambient Background Halo -->
+          <div id="ambient-halo" class="absolute inset-0 opacity-35 transition-all duration-1000 pointer-events-none"
+               style="background: radial-gradient(circle at 50% 45%, #F4A6B8 0%, transparent 68%);"></div>
+
+          <!-- Top Info & Petal Cover Customizer -->
+          <div class="w-full flex items-center justify-between z-10">
+            <span class="text-xs font-semibold text-stone-500 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-blush"></span>
+              55mm × 26mm 웨어러블 키링
+            </span>
+            <!-- Cover Theme Selector -->
+            <div class="flex items-center gap-1.5 bg-white/85 px-2.5 py-1.5 rounded-full border border-stone-200/80 shadow-xs" title="교체 가능한 꽃잎 커버 색상">
+              <span class="text-[11px] text-stone-500 mr-1">커버:</span>
+              <button onclick="setPetalTheme('blush')" class="theme-dot w-4 h-4 rounded-full bg-[#F4A6B8] ring-2 ring-offset-1 ring-charcoal transition-transform hover:scale-110" id="theme-blush" title="벚꽃 블러쉬"></button>
+              <button onclick="setPetalTheme('lavender')" class="theme-dot w-4 h-4 rounded-full bg-[#B8B5E8] transition-transform hover:scale-110" id="theme-lavender" title="라벤더 미스트"></button>
+              <button onclick="setPetalTheme('sage')" class="theme-dot w-4 h-4 rounded-full bg-[#8FB996] transition-transform hover:scale-110" id="theme-sage" title="세이지 민트"></button>
+              <button onclick="setPetalTheme('pearl')" class="theme-dot w-4 h-4 rounded-full bg-[#EFECE6] border border-stone-300 transition-transform hover:scale-110" id="theme-pearl" title="문라이트 펄"></button>
+            </div>
+          </div>
+
+          <!-- Interactive 5-Petal Flower Keychain SVG + 7-Pixel WS2812 LED Ring -->
+          <div class="relative my-3 flex flex-col items-center justify-center z-10 select-none">
+            <!-- Keyring Metal Chain Top -->
+            <div class="w-7 h-7 rounded-full border-[3px] border-amber-300/90 shadow-xs -mb-2 z-0"></div>
+            <div class="w-2.5 h-4 bg-amber-300/90 rounded-full -mb-2 z-0"></div>
+
+            <!-- Flower Body -->
+            <div id="flower-visual" class="flower-container relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center animate-float">
+              <svg viewBox="0 0 300 300" class="w-full h-full drop-shadow-xl">
+                <defs>
+                  <filter id="ledGlow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+
+                <!-- Outer 5 Petals (Replaceable Housing) -->
+                <g id="outer-petals" fill="#F8C8D4" stroke="#EFA6B8" stroke-width="2" class="petal-layer transition-colors duration-500">
+                  <circle cx="150" cy="78" r="56" />
+                  <circle cx="218" cy="128" r="56" />
+                  <circle cx="192" cy="208" r="56" />
+                  <circle cx="108" cy="208" r="56" />
+                  <circle cx="82" cy="128" r="56" />
+                  <circle cx="150" cy="150" r="68" stroke="none" />
+                </g>
+
+                <!-- Micro Diffuser Gap Ring (0.5mm LED light leak groove) -->
+                <circle cx="150" cy="150" r="66" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.85" filter="url(#ledGlow)" id="diffuser-ring"/>
+
+                <!-- Inner Translucent White Petals -->
+                <g id="inner-petals" fill="#FFFFFF" opacity="0.92" class="petal-layer">
+                  <circle cx="150" cy="106" r="32" />
+                  <circle cx="192" cy="136" r="32" />
+                  <circle cx="176" cy="185" r="32" />
+                  <circle cx="124" cy="185" r="32" />
+                  <circle cx="108" cy="136" r="32" />
+                  <circle cx="150" cy="150" r="42" />
+                </g>
+
+                <!-- 7 x WS2812 NeoPixel Ring (D0 / 5행) -->
+                <g id="neopixel-ring" filter="url(#ledGlow)">
+                  <!-- Center Pixel -->
+                  <circle id="led-0" class="led-pixel" cx="150" cy="150" r="6.5" fill="#F4A6B8" />
+                  <!-- 6 Surrounding Pixels -->
+                  <circle id="led-1" class="led-pixel" cx="150" cy="118" r="6.5" fill="#F4A6B8" />
+                  <circle id="led-2" class="led-pixel" cx="178" cy="134" r="6.5" fill="#F4A6B8" />
+                  <circle id="led-3" class="led-pixel" cx="178" cy="166" r="6.5" fill="#F4A6B8" />
+                  <circle id="led-4" class="led-pixel" cx="150" cy="182" r="6.5" fill="#F4A6B8" />
+                  <circle id="led-5" class="led-pixel" cx="122" cy="166" r="6.5" fill="#F4A6B8" />
+                  <circle id="led-6" class="led-pixel" cx="122" cy="134" r="6.5" fill="#F4A6B8" />
+                </g>
+
+                <!-- Center Exposed Optical Heart Rate Sensor (A1 / 6행) -->
+                <circle cx="150" cy="150" r="21" fill="#2C2A2E" stroke="#524E56" stroke-width="2.5" />
+                <circle cx="150" cy="150" r="13" fill="#18171A" />
+                <!-- Green PPG Optical Pulse Emitter -->
+                <circle id="ppg-emitter" cx="150" cy="150" r="4.5" fill="#34D399" opacity="0.85" />
+              </svg>
+
+              <!-- Side Physical Tactile Switch (D8 / 10행) -->
+              <button id="hardware-tactile-btn" onclick="handleTactilePress()"
+                class="tactile-btn absolute -right-2 bottom-10 bg-stone-800 hover:bg-charcoal text-white px-2.5 py-2 rounded-xl shadow-md border border-stone-600 flex flex-col items-center gap-0.5 cursor-pointer"
+                title="키링 측면 택트 스위치(D8) 누르기">
+                <span class="w-3 h-3 rounded-full bg-blush border border-white/60"></span>
+                <span class="text-[9px] font-bold tracking-tight">D8 스위치</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Breathing Phase Status Pill & Primary Action -->
+          <div class="w-full z-10 text-center space-y-3">
+            <div class="bg-white/90 rounded-2xl p-3.5 border border-stone-200/70 shadow-xs">
+              <div class="flex items-center justify-center gap-2">
+                <span id="phase-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blush-light text-blush-dark">대기 모드</span>
+                <span id="cycle-counter" class="text-xs font-medium text-stone-500">0 / 4 사이클</span>
+              </div>
+              <p id="breath-instruction" class="text-lg sm:text-xl font-bold text-charcoal mt-1.5">
+                버튼을 눌러 호흡을 시작하세요
+              </p>
+              <p id="breath-timer-sub" class="text-xs text-stone-500 mt-0.5">
+                검지를 중앙 심박 센서에, 중지·약지에 GSR 스트랩을 착용해 주세요
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button id="start-breath-btn" onclick="toggleBreathingSession()" class="flex-1 py-3 px-4 rounded-2xl bg-charcoal hover:bg-stone-800 text-white font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-2">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <span>호흡 가이드 시작</span>
+              </button>
+              <button onclick="resetBreathingSession()" class="py-3 px-3.5 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium text-sm transition-all" title="초기화">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Biometric Telemetry & Routine Selector (7 cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-6">
+
+          <!-- Breathing Routine Selector Cards -->
+          <div class="glass-card rounded-3xl p-5 shadow-soft">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="font-bold text-sm sm:text-base text-charcoal flex items-center gap-2">
+                <i data-lucide="wind" class="w-4 h-4 text-blush-dark"></i>
+                맞춤 호흡 리듬 선택
+              </h2>
+              <span class="text-xs text-stone-400">LED 색상과 속도가 자동으로 동기화됩니다</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button onclick="selectRoutine('478')" id="routine-478" class="routine-card text-left p-3.5 rounded-2xl border-2 border-blush bg-blush-light/40 transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-blush-dark">긴장 완화</span>
+                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white text-charcoal">4-7-8 호흡</span>
+                </div>
+                <p class="font-bold text-sm text-charcoal mt-1.5">시험·면접 직전 진정</p>
+                <p class="text-[11px] text-stone-500 mt-0.5">4초 들이마시기 · 7초 멈춤 · 8초 내쉬기</p>
+              </button>
+
+              <button onclick="selectRoutine('box')" id="routine-box" class="routine-card text-left p-3.5 rounded-2xl border border-stone-200 bg-white hover:border-lavender transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-lavender-dark">집중 회복</span>
+                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-charcoal">4-4-4-4 박스</span>
+                </div>
+                <p class="font-bold text-sm text-charcoal mt-1.5">업무·학습 몰입 리셋</p>
+                <p class="text-[11px] text-stone-500 mt-0.5">4초 흡기 · 4초 유지 · 4초 호기 · 4초 유지</p>
+              </button>
+
+              <button onclick="selectRoutine('calm')" id="routine-calm" class="routine-card text-left p-3.5 rounded-2xl border border-stone-200 bg-white hover:border-sage transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-sage-dark">일상 밸런스</span>
+                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-charcoal">5-5 공명 호흡</span>
+                </div>
+                <p class="font-bold text-sm text-charcoal mt-1.5">부교감 신경 활성화</p>
+                <p class="text-[11px] text-stone-500 mt-0.5">5초 깊게 들이마시기 · 5초 길게 내쉬기</p>
+              </button>
+            </div>
+          </div>
+
+          <!-- Real-Time Sensor Telemetry Cards (Heart Rate A1 & GSR A2) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Heart Rate Sensor Card -->
+            <div class="glass-card rounded-3xl p-5 shadow-soft flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-xl bg-blush-light text-blush-dark flex items-center justify-center">
+                    <i data-lucide="heart-pulse" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-xs font-bold text-charcoal">심박 측정 센서 (PPG)</h3>
+                    <p class="text-[10px] text-stone-400">핀 A1 (6행) · 검지 접촉</p>
+                  </div>
+                </div>
+                <span id="hr-status-badge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">약간 빠름</span>
+              </div>
+
+              <div class="my-3 flex items-baseline gap-2">
+                <span id="bpm-value" class="text-3xl font-bold text-charcoal tracking-tight">92</span>
+                <span class="text-xs font-semibold text-stone-500">BPM</span>
+                <span id="bpm-delta" class="text-xs font-medium text-sage-dark ml-auto">목표: 68~75 BPM</span>
+              </div>
+
+              <!-- Live PPG Waveform Canvas -->
+              <div class="w-full h-20 bg-stone-50 rounded-2xl border border-stone-200/60 overflow-hidden p-1">
+                <canvas id="hr-canvas" class="w-full h-full"></canvas>
+              </div>
+            </div>
+
+            <!-- Grove GSR Sensor Card -->
+            <div class="glass-card rounded-3xl p-5 shadow-soft flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-xl bg-lavender-light text-lavender-dark flex items-center justify-center">
+                    <i data-lucide="zap" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-xs font-bold text-charcoal">GSR 피부 전기 반응</h3>
+                    <p class="text-[10px] text-stone-400">핀 A2 (7행) · 중지·약지</p>
+                  </div>
+                </div>
+                <span id="gsr-status-badge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">긴장 감지</span>
+              </div>
+
+              <div class="my-3 flex items-baseline gap-2">
+                <span id="gsr-value" class="text-3xl font-bold text-charcoal tracking-tight">68</span>
+                <span class="text-xs font-semibold text-stone-500">/ 100 긴장도</span>
+                <span id="gsr-raw" class="text-[11px] text-stone-400 ml-auto">ADC: 2410</span>
+              </div>
+
+              <!-- Live GSR Smooth Area Canvas -->
+              <div class="w-full h-20 bg-stone-50 rounded-2xl border border-stone-200/60 overflow-hidden p-1">
+                <canvas id="gsr-canvas" class="w-full h-full"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Post-Session Subjective Mood Check-in Bar -->
+          <div class="glass-card rounded-3xl p-5 shadow-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 class="text-sm font-bold text-charcoal">호흡 후 지금 마음 상태 기록하기</h3>
+              <p class="text-xs text-stone-500">주관적 감정과 생체 데이터를 함께 저장해 웰니스 리포트를 업데이트합니다.</p>
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button onclick="logQuickSession('긴장완화 😌')" class="px-3 py-2 rounded-xl text-xs font-semibold bg-sage-light hover:bg-sage text-sage-dark hover:text-white transition-all">
+                😌 한결 차분해짐
+              </button>
+              <button onclick="logQuickSession('집중회복 💡')" class="px-3 py-2 rounded-xl text-xs font-semibold bg-lavender-light hover:bg-lavender text-lavender-dark hover:text-white transition-all">
+                💡 머리가 맑아짐
+              </button>
+              <button onclick="logQuickSession('여전히떨림 💓')" class="px-3 py-2 rounded-xl text-xs font-semibold bg-blush-light hover:bg-blush text-blush-dark hover:text-white transition-all">
+                💓 조금 더 필요함
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: AI EMOTIONAL WELLNESS COMPANION                                -->
+    <!-- ===================================================================== -->
+    <section id="tab-ai" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left: AI Companion Intro & Quick Prompts (4 cols) -->
+        <div class="lg:col-span-4 glass-card rounded-3xl p-6 shadow-soft flex flex-col justify-between space-y-6">
+          <div class="space-y-4">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blush to-lavender text-white flex items-center justify-center shadow-sm">
+              <i data-lucide="sparkles" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <span class="text-xs font-bold text-blush-dark">AI 마음 케어 파트너</span>
+              <h2 class="text-xl font-bold text-charcoal mt-1">지금 어떤 고민이 마음을 무겁게 하나요?</h2>
+              <p class="text-xs text-stone-500 leading-relaxed mt-2">
+                시험·면접 앞의 떨림, 업무 압박, 인간관계 고민을 편하게 털어놓으세요. BLOOMI AI가 현재 마음 상태에 딱 맞는 <strong>맞춤 호흡 루틴</strong>과 <strong>LED 컬러 테라피</strong>를 키링에 바로 적용해 드립니다.
+              </p>
+            </div>
+
+            <!-- Situation Preset Chips -->
+            <div class="space-y-2 pt-2">
+              <p class="text-xs font-bold text-stone-600">자주 찾는 상황별 빠른 상담</p>
+              <button onclick="sendPresetConcern('내일 중요한 면접이 있어서 심장이 너무 빨리 뛰고 손에 땀이 나요.')" class="w-full text-left p-3 rounded-2xl bg-stone-50 hover:bg-blush-light/60 border border-stone-200/80 text-xs font-medium text-charcoal transition-all">
+                🎓 "내일 중요한 면접이 있어서 심장이 너무 빨리 뛰어요"
+              </button>
+              <button onclick="sendPresetConcern('업무가 한꺼번에 몰려서 머리가 복잡하고 집중이 전혀 안 돼요.')" class="w-full text-left p-3 rounded-2xl bg-stone-50 hover:bg-lavender-light/60 border border-stone-200/80 text-xs font-medium text-charcoal transition-all">
+                💼 "업무가 몰려서 머리가 복잡하고 집중이 안 돼요"
+              </button>
+              <button onclick="sendPresetConcern('인간관계 때문에 마음이 지치고 밤에 잠이 잘 오지 않아요.')" class="w-full text-left p-3 rounded-2xl bg-stone-50 hover:bg-sage-light/60 border border-stone-200/80 text-xs font-medium text-charcoal transition-all">
+                🌙 "인간관계로 마음이 지치고 쉽게 진정이 안 돼요"
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-cream border border-stone-200/80 text-xs text-stone-600 space-y-1">
+            <p class="font-bold text-charcoal">💡 AI → 디바이스 즉시 연동</p>
+            <p>AI가 추천한 루틴 카드의 <strong>[키링으로 바로 실행]</strong> 버튼을 누르면 호흡 스튜디오와 LED 색상이 자동 세팅됩니다.</p>
+          </div>
+        </div>
+
+        <!-- Right: Interactive AI Chat Window (8 cols) -->
+        <div class="lg:col-span-8 glass-card rounded-3xl shadow-soft flex flex-col h-[580px] overflow-hidden">
+          <!-- Chat Header -->
+          <div class="px-6 py-4 border-b border-stone-200/70 flex items-center justify-between bg-white/60">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-sage"></span>
+              <span class="font-bold text-sm text-charcoal">BLOOMI 마음 상담소</span>
+            </div>
+            <span class="text-[11px] text-stone-400">감정 분석 기반 호흡 처방</span>
+          </div>
+
+          <!-- Chat Messages Feed -->
+          <div id="ai-chat-feed" class="flex-1 overflow-y-auto p-5 space-y-4">
+            <!-- Initial Welcome Message -->
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-xl bg-blush-light text-blush-dark flex items-center justify-center shrink-0 font-bold text-xs">
+                🌸
+              </div>
+              <div class="bg-white border border-stone-200/80 rounded-2xl rounded-tl-none p-4 max-w-xl shadow-2xs space-y-2">
+                <p class="text-sm text-charcoal leading-relaxed">
+                  안녕하세요! 당신의 작은 호흡 메이트 <strong>BLOOMI</strong>예요. 오늘 하루 어떤 순간에 긴장하거나 마음이 지치셨나요? 편하게 이야기해 주시면 지금 가장 필요한 호흡 리듬을 찾아드릴게요.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input Box -->
+          <form onsubmit="handleAiChatSubmit(event)" class="p-4 border-t border-stone-200/70 bg-white/80 flex items-center gap-2">
+            <input id="ai-chat-input" type="text" placeholder="예: 발표 직전이라 너무 떨려요 / 마음이 답답해요..."
+              class="flex-1 px-4 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-blush" />
+            <button type="submit" class="px-5 py-3 rounded-2xl bg-charcoal hover:bg-stone-800 text-white text-sm font-semibold transition-all flex items-center gap-1.5 shrink-0">
+              <span>상담하기</span>
+              <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: DATA & WELLNESS REPORT                                         -->
+    <!-- ===================================================================== -->
+    <section id="tab-report" class="tab-content hidden space-y-6">
+      <!-- Top Summary KPIs -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-card rounded-3xl p-5 shadow-soft">
+          <span class="text-xs font-medium text-stone-500">누적 호흡 연습</span>
+          <p id="stat-total-sessions" class="text-2xl sm:text-3xl font-bold text-charcoal mt-1">12회</p>
+          <span class="text-[11px] font-semibold text-sage-dark mt-1 inline-block">이번 주 +4회 달성</span>
+        </div>
+        <div class="glass-card rounded-3xl p-5 shadow-soft">
+          <span class="text-xs font-medium text-stone-500">평균 심박수 안정 효과</span>
+          <p class="text-2xl sm:text-3xl font-bold text-blush-dark mt-1">-14 BPM</p>
+          <span class="text-[11px] text-stone-500 mt-1 inline-block">호흡 전 91 → 후 77 BPM</span>
+        </div>
+        <div class="glass-card rounded-3xl p-5 shadow-soft">
+          <span class="text-xs font-medium text-stone-500">GSR 긴장도 완화율</span>
+          <p class="text-2xl sm:text-3xl font-bold text-lavender-dark mt-1">-32%</p>
+          <span class="text-[11px] text-stone-500 mt-1 inline-block">피부 전기 반응 기준</span>
+        </div>
+        <div class="glass-card rounded-3xl p-5 shadow-soft">
+          <span class="text-xs font-medium text-stone-500">가장 효과적인 루틴</span>
+          <p class="text-xl sm:text-2xl font-bold text-charcoal mt-1">4-7-8 호흡</p>
+          <span class="text-[11px] text-sage-dark mt-1 inline-block">만족도 94%</span>
+        </div>
+      </div>
+
+      <!-- Weekly Chart & Session Log Table -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Weekly Trend Chart (6 cols) -->
+        <div class="lg:col-span-6 glass-card rounded-3xl p-6 shadow-soft flex flex-col justify-between">
+          <div>
+            <h3 class="font-bold text-base text-charcoal">주간 호흡 전·후 심박수 & 긴장도 변화</h3>
+            <p class="text-xs text-stone-500 mt-0.5">호흡 세션 실행 전(분홍)과 완료 후(세이지 민트)의 평균 심박수 비교</p>
+          </div>
+          <div class="w-full h-56 mt-4">
+            <canvas id="weekly-chart-canvas" class="w-full h-full"></canvas>
+          </div>
+          <div class="flex items-center justify-center gap-6 mt-3 text-xs">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blush"></span>호흡 전 평균 BPM</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-sage"></span>호흡 후 안정 BPM</span>
+          </div>
+        </div>
+
+        <!-- Recent Session History List (6 cols) -->
+        <div class="lg:col-span-6 glass-card rounded-3xl p-6 shadow-soft flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-bold text-base text-charcoal">최근 호흡 & 감정 체크인 기록</h3>
+              <p class="text-xs text-stone-500">실시간 스튜디오에서 기록한 내역이 즉시 반영됩니다</p>
+            </div>
+          </div>
+          <div id="session-log-list" class="space-y-2.5 overflow-y-auto max-h-72 pr-1">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: BRAND STORY & HARDWARE ARCHITECTURE (XIAO ESP32-C3)            -->
+    <!-- ===================================================================== -->
+    <section id="tab-about" class="tab-content hidden space-y-8">
+      <!-- 1.1 기획 배경 및 문제 정의 -->
+      <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-soft space-y-6">
+        <div class="max-w-3xl">
+          <span class="text-xs font-bold px-3 py-1 rounded-full bg-blush-light text-blush-dark">1.1 기획 배경 및 문제 정의</span>
+          <h2 class="text-2xl font-bold text-charcoal mt-3">스마트폰 화면을 보지 않고도, 손끝에서 피어나는 호흡 리듬</h2>
+          <p class="text-sm text-stone-600 leading-relaxed mt-3">
+            시험·면접을 앞둔 수험생뿐 아니라 현대인들은 업무 스트레스, 인간관계, 미래에 대한 고민 등으로 일상에서 지속적인 긴장과 심리적 부담을 경험합니다. 기존 명상 및 호흡 관리 서비스는 대부분 스마트폰 앱 기반이어서 <strong>직접 앱을 실행해야 하는 번거로움</strong>과 <strong>화면 알림에 의한 주의 분산</strong>이 발생합니다.
+          </p>
+        </div>
+
+        <!-- 3 Core Pillars: Physical, AI, Data -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+          <div class="p-5 rounded-2xl bg-blush-light/45 border border-blush/30 space-y-2">
+            <div class="w-9 h-9 rounded-xl bg-blush text-white flex items-center justify-center font-bold">P</div>
+            <h3 class="font-bold text-base text-charcoal">Physical (촉각·시각 디바이스)</h3>
+            <p class="text-xs text-stone-600 leading-relaxed">
+              꽃 형태의 소형 LED 키링 디바이스로 스마트폰 없이 버튼 한 번만 눌러 호흡 리듬을 직관적으로 안내합니다.
+            </p>
+          </div>
+          <div class="p-5 rounded-2xl bg-lavender-light/55 border border-lavender/40 space-y-2">
+            <div class="w-9 h-9 rounded-xl bg-lavender-dark text-white flex items-center justify-center font-bold">AI</div>
+            <h3 class="font-bold text-base text-charcoal">AI (감정 공감 & 맞춤 처방)</h3>
+            <p class="text-xs text-stone-600 leading-relaxed">
+              사용자의 고민을 듣고 현재 심리·생체 상태에 가장 적합한 호흡 리듬과 휴식 루틴을 제안합니다.
+            </p>
+          </div>
+          <div class="p-5 rounded-2xl bg-sage-light/55 border border-sage/40 space-y-2">
+            <div class="w-9 h-9 rounded-xl bg-sage-dark text-white flex items-center justify-center font-bold">D</div>
+            <h3 class="font-bold text-base text-charcoal">Data (생체신호 & 습관 리포트)</h3>
+            <p class="text-xs text-stone-600 leading-relaxed">
+              심박(PPG)·피부전기반응(GSR) 측정값과 주관적 마음 상태를 분석해 개인화된 웰니스 경험을 제공합니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.2 핵심 가치 5가지 -->
+      <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-soft">
+        <span class="text-xs font-bold px-3 py-1 rounded-full bg-sage-light text-sage-dark">1.2 BLOOMI 핵심 가치</span>
+        <h2 class="text-xl font-bold text-charcoal mt-3 mb-5">일상 속 지속 가능한 웰니스를 위한 5가지 설계 원칙</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          <div class="p-4 rounded-2xl bg-white border border-stone-200/80">
+            <span class="text-xs font-bold text-blush-dark">01. 접근성</span>
+            <p class="font-bold text-sm text-charcoal mt-1">원터치 즉시 호흡</p>
+            <p class="text-xs text-stone-500 mt-1">스마트폰을 켜지 않고 측면 버튼만 눌러 즉시 호흡 시작</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-stone-200/80">
+            <span class="text-xs font-bold text-lavender-dark">02. 개인화</span>
+            <p class="font-bold text-sm text-charcoal mt-1">감정 맞춤 루틴</p>
+            <p class="text-xs text-stone-500 mt-1">입력한 감정과 생체 기록에 최적화된 호흡 주기 추천</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-stone-200/80">
+            <span class="text-xs font-bold text-sage-dark">03. 휴대성</span>
+            <p class="font-bold text-sm text-charcoal mt-1">초소형 키링 폼팩터</p>
+            <p class="text-xs text-stone-500 mt-1">지름 55mm 내외로 가방·파우치에 가볍게 부착</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-stone-200/80">
+            <span class="text-xs font-bold text-amber-600">04. 감성적 가치</span>
+            <p class="font-bold text-sm text-charcoal mt-1">교체형 꽃잎 커버</p>
+            <p class="text-xs text-stone-500 mt-1">취향에 따라 꽃잎 하우징을 바꾸는 패션 액세서리</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-stone-200/80">
+            <span class="text-xs font-bold text-charcoal">05. 지속성</span>
+            <p class="font-bold text-sm text-charcoal mt-1">AI + 데이터 습관화</p>
+            <p class="text-xs text-stone-500 mt-1">일회성 안내를 넘어 AI 대화와 기록 기반 습관 형성</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Team Breadboard & Pinout Reference Card -->
+      <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-soft grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div class="lg:col-span-7 space-y-4">
+          <span class="text-xs font-bold px-3 py-1 rounded-full bg-lavender-light text-lavender-dark">Hardware Prototype Architecture</span>
+          <h2 class="text-xl font-bold text-charcoal">Seeed Studio XIAO ESP32-C3 브레드보드 & 키링 배선 사양</h2>
+          <p class="text-xs text-stone-600 leading-relaxed">
+            우리 팀의 브레드보드 회로 설계를 그대로 반영하여 Web Serial 통신 시 아래 핀 맵과 1:1로 연동됩니다.
+          </p>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-stone-200 text-stone-500">
+                  <th class="py-2.5 px-3">부품명</th>
+                  <th class="py-2.5 px-3">브레드보드 위치</th>
+                  <th class="py-2.5 px-3">XIAO 핀</th>
+                  <th class="py-2.5 px-3">역할</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-stone-100">
+                <tr>
+                  <td class="py-2.5 px-3 font-bold">7 × WS2812 RGB LED 링</td>
+                  <td class="py-2.5 px-3">5행 a (파랑 DIN)</td>
+                  <td class="py-2.5 px-3 font-mono font-bold text-blue-600">D0</td>
+                  <td class="py-2.5 px-3 text-stone-600">미세 틈새 확산 호흡 LED</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-bold">심박 측정 센서 (PPG)</td>
+                  <td class="py-2.5 px-3">6행 a (보라 S)</td>
+                  <td class="py-2.5 px-3 font-mono font-bold text-purple-600">D1 / A1</td>
+                  <td class="py-2.5 px-3 text-stone-600">꽃잎 중앙 노출 검지 심박 측정</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-bold">Grove - GSR 센서</td>
+                  <td class="py-2.5 px-3">7행 a (노랑 SIG)</td>
+                  <td class="py-2.5 px-3 font-mono font-bold text-amber-600">D2 / A2</td>
+                  <td class="py-2.5 px-3 text-stone-600">중지·약지 피부 전기 반응(긴장도)</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-bold">택트 스위치</td>
+                  <td class="py-2.5 px-3">20행 j → 10행 j</td>
+                  <td class="py-2.5 px-3 font-mono font-bold text-emerald-600">D8</td>
+                  <td class="py-2.5 px-3 text-stone-600">원터치 호흡 모드 시작/전환</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Interactive SVG Breadboard Mini Diagram -->
+        <div class="lg:col-span-5 bg-white rounded-2xl p-4 border border-stone-200/80 flex flex-col items-center">
+          <p class="text-xs font-bold text-charcoal mb-2">팀 회로 배선 요약도 (XIAO ESP32-C3)</p>
+          <svg viewBox="0 0 320 220" class="w-full max-w-xs">
+            <rect x="95" y="15" width="130" height="190" rx="12" fill="#F5F3EF" stroke="#D6D1C9" stroke-width="2"/>
+            <rect x="156" y="15" width="8" height="190" fill="#E5E0D8"/>
+            <!-- XIAO Chip -->
+            <rect x="115" y="35" width="90" height="85" rx="8" fill="#2C2A2E"/>
+            <rect x="145" y="27" width="30" height="14" rx="3" fill="#B8B2AA"/>
+            <text x="160" y="76" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="bold">XIAO</text>
+            <text x="160" y="90" text-anchor="middle" fill="#A8A29E" font-size="8">ESP32-C3</text>
+
+            <!-- Left Sensor Wires -->
+            <circle cx="35" cy="48" r="16" fill="#FDECEF" stroke="#F4A6B8" stroke-width="2"/>
+            <text x="35" y="51" text-anchor="middle" font-size="8" font-weight="bold" fill="#2C2A2E">LED</text>
+            <path d="M51 48 Q85 48 115 48" stroke="#3B82F6" stroke-width="2.5" fill="none"/>
+            <text x="82" y="42" font-size="8" fill="#2563EB" font-weight="bold">D0 (5행)</text>
+
+            <circle cx="35" cy="95" r="16" fill="#EDF5EE" stroke="#8FB996" stroke-width="2"/>
+            <text x="35" y="98" text-anchor="middle" font-size="8" font-weight="bold" fill="#2C2A2E">심박</text>
+            <path d="M51 95 Q85 75 115 66" stroke="#8B5CF6" stroke-width="2.5" fill="none"/>
+            <text x="76" y="72" font-size="8" fill="#7C3AED" font-weight="bold">A1 (6행)</text>
+
+            <circle cx="35" cy="145" r="16" fill="#F2F1FC" stroke="#B8B5E8" stroke-width="2"/>
+            <text x="35" y="148" text-anchor="middle" font-size="8" font-weight="bold" fill="#2C2A2E">GSR</text>
+            <path d="M51 145 Q85 110 115 84" stroke="#EAB308" stroke-width="2.5" fill="none"/>
+            <text x="76" y="128" font-size="8" fill="#CA8A04" font-weight="bold">A2 (7행)</text>
+
+            <!-- Tactile Switch -->
+            <rect x="138" y="145" width="44" height="32" rx="6" fill="#E7E5E4" stroke="#78716C" stroke-width="1.5"/>
+            <circle cx="160" cy="161" r="8" fill="#FFFFFF" stroke="#78716C" stroke-width="1.5"/>
+            <path d="M182 161 Q235 161 205 102" stroke="#10B981" stroke-width="2.5" fill="none"/>
+            <text x="235" y="135" font-size="8" fill="#059669" font-weight="bold">D8 (10행)</text>
+          </svg>
+          <p class="text-[11px] text-stone-500 text-center mt-1">
+            시리얼 출력 포맷 예시: <code class="bg-stone-100 px-1.5 py-0.5 rounded text-charcoal">BPM:76,GSR:42,BTN:1</code>
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-stone-200/70 py-5 px-4 text-center text-xs text-stone-400">
+    BLOOMI (블루미) — Physical · AI · Data 기반 스마트 꽃잎 호흡 웰니스 키링 프로젝트
+  </footer>
+
+  <!-- ======================================================================= -->
+  <!-- JAVASCRIPT LOGIC (Defined globally so inline onclick handlers work)      -->
+  <!-- ======================================================================= -->
+  <script>
+    // -------------------------------------------------------------------------
+    // 1. GLOBAL STATE
+    // -------------------------------------------------------------------------
+    const state = {
+      activeTab: 'studio',
+      isBreathing: false,
+      routineKey: '478',
+      cycleCount: 0,
+      maxCycles: 4,
+      phaseIndex: 0,
+      phaseElapsed: 0,
+      breathTimerId: null,
+      audioEnabled: true,
+      synth: null,
+
+      // Biometric Telemetry State
+      isSerialConnected: false,
+      serialPort: null,
+      simScenario: 'tense', // 'tense' | 'normal' | 'relaxed'
+      bpm: 92,
+      gsr: 68,
+      gsrRaw: 2410,
+      hrHistory: Array.from({ length: 80 }, () => 0),
+      gsrHistory: Array.from({ length: 60 }, () => 68),
+      wavePhase: 0,
+
+      // Saved Session Logs
+      logs: [
+        { time: '오늘 14:20', routine: '4-7-8 호흡', bpmBefore: 96, bpmAfter: 76, mood: '긴장완화 😌' },
+        { time: '어제 21:45', routine: '5-5 공명 호흡', bpmBefore: 84, bpmAfter: 70, mood: '집중회복 💡' },
+        { time: '2일 전 09:10', routine: '4-4-4-4 박스', bpmBefore: 92, bpmAfter: 75, mood: '긴장완화 😌' },
+      ]
+    };
+
+    const ROUTINES = {
+      '478': {
+        name: '4-7-8 호흡',
+        phases: [
+          { label: '들이마시기 (꽃 펴짐)', duration: 4, scale: 1.16, petalScale: 1.06, color: '#F4A6B8', halo: '#F4A6B8', hint: '4초 동안 코로 깊게 숨을 들이마시며 꽃잎이 활짝 펴집니다' },
+          { label: '숨 참기 (꽃 닫힘)', duration: 7, scale: 0.86, petalScale: 0.84, color: '#B8B5E8', halo: '#B8B5E8', hint: '7초 동안 숨을 머금으며 꽃잎이 고요하게 오므라듭니다' },
+          { label: '내쉬기 (꽃 다시 펴짐)', duration: 8, scale: 1.16, petalScale: 1.06, color: '#8FB996', halo: '#8FB996', hint: '8초 동안 긴장을 모두 내보내며 꽃잎이 다시 부드럽게 펴집니다' }
+        ]
+      },
+      'box': {
+        name: '4-4-4-4 박스',
+        phases: [
+          { label: '들이마시기 (꽃 펴짐)', duration: 4, scale: 1.14, petalScale: 1.05, color: '#B8B5E8', halo: '#B8B5E8', hint: '4초 동안 일정한 속도로 숨을 채우며 꽃을 피웁니다' },
+          { label: '머금기 (꽃 닫힘)', duration: 4, scale: 0.88, petalScale: 0.86, color: '#F4A6B8', halo: '#F4A6B8', hint: '4초 동안 꽃잎을 오므린 채 호흡을 유지합니다' },
+          { label: '내쉬기 (꽃 다시 펴짐)', duration: 4, scale: 1.14, petalScale: 1.05, color: '#8FB996', halo: '#8FB996', hint: '4초 동안 어깨의 힘을 빼며 꽃잎을 활짝 폅니다' },
+          { label: '비우기 (꽃 닫힘)', duration: 4, scale: 0.88, petalScale: 0.86, color: '#D6D3D1', halo: '#8FB996', hint: '다음 호흡 전 4초간 꽃봉오리 상태로 고요히 머무릅니다' }
+        ]
+      },
+      'calm': {
+        name: '5-5 공명 호흡',
+        phases: [
+          { label: '들이마시기 (꽃 펴짐)', duration: 5, scale: 1.15, petalScale: 1.05, color: '#8FB996', halo: '#8FB996', hint: '5초 동안 깊게 들이마시며 꽃잎을 넓게 펼칩니다' },
+          { label: '내쉬기 (꽃 닫힘)', duration: 5, scale: 0.88, petalScale: 0.86, color: '#F4A6B8', halo: '#F4A6B8', hint: '5초 동안 따뜻하게 내쉬며 꽃잎을 차분히 오므립니다' }
+        ]
+      }
+    };
+
+    const PETAL_THEMES = {
+      blush: { outer: '#F8C8D4', stroke: '#EFA6B8' },
+      lavender: { outer: '#DCD9F8', stroke: '#B8B5E8' },
+      sage: { outer: '#CBE3CF', stroke: '#8FB996' },
+      pearl: { outer: '#F5F2EB', stroke: '#DCD6C8' }
+    };
+
+    // -------------------------------------------------------------------------
+    // 2. NAVIGATION & UI HELPERS
+    // -------------------------------------------------------------------------
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+
+      // Hide all tab sections
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById('tab-' + tabId);
+      if (target) target.classList.remove('hidden');
+
+      // Update Desktop Nav Styles
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-white', 'text-charcoal', 'shadow-sm', 'font-semibold');
+        btn.classList.add('text-stone-600', 'font-medium');
+      });
+      const activeDesktopBtn = document.getElementById('nav-' + tabId);
+      if (activeDesktopBtn) {
+        activeDesktopBtn.classList.add('bg-white', 'text-charcoal', 'shadow-sm', 'font-semibold');
+        activeDesktopBtn.classList.remove('text-stone-600', 'font-medium');
+      }
+
+      // Update Mobile Nav Styles
+      document.querySelectorAll('.m-nav-btn').forEach(btn => {
+        btn.classList.remove('bg-charcoal', 'text-white', 'font-semibold');
+        btn.classList.add('bg-stone-100', 'text-stone-600', 'font-medium');
+      });
+      const activeMobileBtn = document.getElementById('m-nav-' + tabId);
+      if (activeMobileBtn) {
+        activeMobileBtn.classList.add('bg-charcoal', 'text-white', 'font-semibold');
+        activeMobileBtn.classList.remove('bg-stone-100', 'text-stone-600', 'font-medium');
+      }
+
+      if (tabId === 'report') {
+        renderWeeklyChart();
+        renderSessionLogs();
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const bgClass = type === 'success' ? 'bg-charcoal text-white' : 'bg-white text-charcoal border border-stone-200';
+      toast.className = `${bgClass} px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold flex items-center gap-2 transition-all duration-300 transform translate-y-2 opacity-0`;
+      toast.innerHTML = `<span>🌸</span><span>${message}</span>`;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function setPetalTheme(themeKey) {
+      const theme = PETAL_THEMES[themeKey];
+      if (!theme) return;
+      const outerGroup = document.getElementById('outer-petals');
+      outerGroup.setAttribute('fill', theme.outer);
+      outerGroup.setAttribute('stroke', theme.stroke);
+
+      document.querySelectorAll('.theme-dot').forEach(dot => {
+        dot.classList.remove('ring-2', 'ring-offset-1', 'ring-charcoal');
+      });
+      const activeDot = document.getElementById('theme-' + themeKey);
+      if (activeDot) activeDot.classList.add('ring-2', 'ring-offset-1', 'ring-charcoal');
+
+      showToast('꽃잎 커버 색상이 변경되었습니다.');
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. TONE.JS GENTLE CHIME AUDIO GUIDE
+    // -------------------------------------------------------------------------
+    function playPhaseChime(phaseLabel) {
+      if (!state.audioEnabled || typeof Tone === 'undefined') return;
+      try {
+        if (Tone.context.state !== 'running') {
+          Tone.start();
+        }
+        if (!state.synth) {
+          state.synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.4, decay: 0.8, sustain: 0.2, release: 1.5 }
+          }).toDestination();
+          state.synth.volume.value = -14;
+        }
+        if (phaseLabel.includes('들이마시기')) {
+          state.synth.triggerAttackRelease(['C5', 'E5'], '1.2');
+        } else if (phaseLabel.includes('내쉬기')) {
+          state.synth.triggerAttackRelease(['G4', 'B4'], '1.5');
+        } else {
+          state.synth.triggerAttackRelease(['A4'], '0.8');
+        }
+      } catch (e) {
+        // Ignore audio autoplay restriction errors until next user gesture
+      }
+    }
+
+    function toggleAudioGuide() {
+      state.audioEnabled = !state.audioEnabled;
+      const label = document.getElementById('sound-label');
+      const icon = document.getElementById('sound-icon');
+      label.textContent = state.audioEnabled ? '사운드 안내 켜짐' : '사운드 안내 꺼짐';
+      icon.setAttribute('data-lucide', state.audioEnabled ? 'volume-2' : 'volume-x');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. BREATHING PACER & 7-PIXEL NEO-PIXEL LED CONTROLLER
+    // -------------------------------------------------------------------------
+    function selectRoutine(key) {
+      state.routineKey = key;
+      document.querySelectorAll('.routine-card').forEach(card => {
+        card.classList.remove('border-2', 'border-blush', 'bg-blush-light/40');
+        card.classList.add('border', 'border-stone-200', 'bg-white');
+      });
+      const selected = document.getElementById('routine-' + key);
+      if (selected) {
+        selected.classList.remove('border', 'border-stone-200', 'bg-white');
+        selected.classList.add('border-2', 'border-blush', 'bg-blush-light/40');
+      }
+
+      if (state.isBreathing) {
+        resetBreathingSession();
+        startBreathingSession();
+      } else {
+        showToast(`${ROUTINES[key].name} 리듬이 선택되었습니다.`);
+      }
+    }
+
+    function handleTactilePress() {
+      const btn = document.getElementById('hardware-tactile-btn');
+      btn.classList.add('pressed');
+      setTimeout(() => btn.classList.remove('pressed'), 180);
+      toggleBreathingSession();
+    }
+
+    function toggleBreathingSession() {
+      if (state.isBreathing) {
+        stopBreathingSession();
+      } else {
+        startBreathingSession();
+      }
+    }
+
+    function startBreathingSession() {
+      state.isBreathing = true;
+      state.cycleCount = 1;
+      state.phaseIndex = 0;
+      state.phaseElapsed = 0;
+
+      const btn = document.getElementById('start-breath-btn');
+      btn.innerHTML = `<i data-lucide="pause" class="w-4 h-4"></i><span>호흡 일시정지</span>`;
+      btn.classList.remove('bg-charcoal');
+      btn.classList.add('bg-blush-dark');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      updateBreathingStep();
+      clearInterval(state.breathTimerId);
+      state.breathTimerId = setInterval(() => {
+        const routine = ROUTINES[state.routineKey];
+        const currentPhase = routine.phases[state.phaseIndex];
+        state.phaseElapsed++;
+
+        if (state.phaseElapsed >= currentPhase.duration) {
+          state.phaseElapsed = 0;
+          state.phaseIndex++;
+
+          if (state.phaseIndex >= routine.phases.length) {
+            state.phaseIndex = 0;
+            state.cycleCount++;
+            if (state.cycleCount > state.maxCycles) {
+              completeBreathingSession();
+              return;
+            }
+          }
+          updateBreathingStep();
+        } else {
+          const remaining = currentPhase.duration - state.phaseElapsed;
+          document.getElementById('breath-instruction').textContent = `${currentPhase.label} · ${remaining}초`;
+        }
+      }, 1000);
+    }
+
+    function updateBreathingStep() {
+      const routine = ROUTINES[state.routineKey];
+      const phase = routine.phases[state.phaseIndex];
+      const remaining = phase.duration - state.phaseElapsed;
+
+      document.getElementById('phase-badge').textContent = routine.name;
+      document.getElementById('cycle-counter').textContent = `${state.cycleCount} / ${state.maxCycles} 사이클`;
+      document.getElementById('breath-instruction').textContent = `${phase.label} · ${remaining}초`;
+      document.getElementById('breath-timer-sub').textContent = phase.hint;
+
+      // Update Flower Scale & Petal Opening/Closing with Exact Phase Duration
+      const flower = document.getElementById('flower-visual');
+      const outerPetals = document.getElementById('outer-petals');
+      const innerPetals = document.getElementById('inner-petals');
+      const transitionRule = `transform ${phase.duration}s cubic-bezier(0.4, 0, 0.2, 1)`;
+
+      flower.style.transition = transitionRule;
+      flower.style.transform = `scale(${phase.scale})`;
+
+      if (outerPetals && innerPetals) {
+        outerPetals.style.transition = `${transitionRule}, fill 0.5s ease, stroke 0.5s ease`;
+        innerPetals.style.transition = transitionRule;
+        outerPetals.style.transform = `scale(${phase.petalScale || 1})`;
+        innerPetals.style.transform = `scale(${phase.petalScale ? (phase.petalScale * 0.98) : 1})`;
+      }
+
+      for (let i = 0; i < 7; i++) {
+        const led = document.getElementById('led-' + i);
+        if (led) led.setAttribute('fill', phase.color);
+      }
+      document.getElementById('diffuser-ring').setAttribute('stroke', phase.color);
+      document.getElementById('ambient-halo').style.background = `radial-gradient(circle at 50% 45%, ${phase.halo} 0%, transparent 68%)`;
+
+      playPhaseChime(phase.label);
+    }
+
+    function stopBreathingSession() {
+      state.isBreathing = false;
+      clearInterval(state.breathTimerId);
+
+      const btn = document.getElementById('start-breath-btn');
+      btn.innerHTML = `<i data-lucide="play" class="w-4 h-4"></i><span>호흡 가이드 재개</span>`;
+      btn.classList.add('bg-charcoal');
+      btn.classList.remove('bg-blush-dark');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      const flower = document.getElementById('flower-visual');
+      flower.style.transition = 'transform 0.8s ease';
+      flower.style.transform = 'scale(1)';
+      document.getElementById('outer-petals').style.transform = 'scale(1)';
+      document.getElementById('inner-petals').style.transform = 'scale(1)';
+      document.getElementById('breath-instruction').textContent = '호흡이 일시정지되었습니다';
+    }
+
+    function resetBreathingSession() {
+      state.isBreathing = false;
+      clearInterval(state.breathTimerId);
+      state.cycleCount = 0;
+      state.phaseIndex = 0;
+      state.phaseElapsed = 0;
+
+      const btn = document.getElementById('start-breath-btn');
+      btn.innerHTML = `<i data-lucide="play" class="w-4 h-4"></i><span>호흡 가이드 시작</span>`;
+      btn.classList.add('bg-charcoal');
+      btn.classList.remove('bg-blush-dark');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      document.getElementById('phase-badge').textContent = '대기 모드';
+      document.getElementById('cycle-counter').textContent = '0 / 4 사이클';
+      document.getElementById('breath-instruction').textContent = '버튼을 눌러 호흡을 시작하세요';
+      document.getElementById('breath-timer-sub').textContent = '검지를 중앙 심박 센서에, 중지·약지에 GSR 스트랩을 착용해 주세요';
+
+      const flower = document.getElementById('flower-visual');
+      flower.style.transition = 'transform 0.8s ease';
+      flower.style.transform = 'scale(1)';
+      document.getElementById('outer-petals').style.transform = 'scale(1)';
+      document.getElementById('inner-petals').style.transform = 'scale(1)';
+    }
+
+    function completeBreathingSession() {
+      stopBreathingSession();
+      document.getElementById('phase-badge').textContent = '완료 ✨';
+      document.getElementById('breath-instruction').textContent = '4사이클 호흡을 모두 마쳤어요!';
+      document.getElementById('breath-timer-sub').textContent = '심박수와 긴장도가 한결 안정되었습니다. 아래에서 마음 상태를 기록해 보세요.';
+      showToast('4사이클 호흡 완료! 심박과 긴장도가 완화되었습니다.', 'success');
+
+      if (!state.isSerialConnected) {
+        state.simScenario = 'relaxed';
+        document.getElementById('sim-scenario').value = 'relaxed';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. BIOMETRIC TELEMETRY LOOP & CANVAS CHARTS
+    // -------------------------------------------------------------------------
+    function changeSimScenario(val) {
+      state.simScenario = val;
+      showToast('시뮬레이션 생체 시나리오가 변경되었습니다.');
+    }
+
+    function startTelemetryLoop() {
+      setInterval(() => {
+        if (!state.isSerialConnected) {
+          // Determine target BPM and GSR based on scenario and active breathing
+          let targetBpm = 78;
+          let targetGsr = 45;
+
+          if (state.simScenario === 'tense') {
+            targetBpm = state.isBreathing ? 80 : 94;
+            targetGsr = state.isBreathing ? 52 : 72;
+          } else if (state.simScenario === 'normal') {
+            targetBpm = state.isBreathing ? 72 : 78;
+            targetGsr = state.isBreathing ? 38 : 46;
+          } else if (state.simScenario === 'relaxed') {
+            targetBpm = 68;
+            targetGsr = 28;
+          }
+
+          state.bpm = Math.round(state.bpm + (targetBpm - state.bpm) * 0.15 + (Math.random() * 2 - 1));
+          state.gsr = Math.round(state.gsr + (targetGsr - state.gsr) * 0.15 + (Math.random() * 2 - 1));
+          state.gsrRaw = Math.round(1400 + state.gsr * 16);
+        }
+
+        // Update UI Numbers & Badges
+        document.getElementById('bpm-value').textContent = state.bpm;
+        document.getElementById('gsr-value').textContent = state.gsr;
+        document.getElementById('gsr-raw').textContent = `ADC: ${state.gsrRaw}`;
+
+        const hrBadge = document.getElementById('hr-status-badge');
+        if (state.bpm >= 88) {
+          hrBadge.textContent = '긴장·빠름';
+          hrBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700';
+        } else if (state.bpm >= 76) {
+          hrBadge.textContent = '보통';
+          hrBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700';
+        } else {
+          hrBadge.textContent = '안정됨';
+          hrBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+        }
+
+        const gsrBadge = document.getElementById('gsr-status-badge');
+        if (state.gsr >= 60) {
+          gsrBadge.textContent = '긴장 감지';
+          gsrBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700';
+        } else if (state.gsr >= 40) {
+          gsrBadge.textContent = '주의 집중';
+          gsrBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-lavender-light text-lavender-dark';
+        } else {
+          gsrBadge.textContent = '편안함';
+          gsrBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+        }
+
+        // Push to GSR rolling array
+        state.gsrHistory.push(state.gsr);
+        if (state.gsrHistory.length > 60) state.gsrHistory.shift();
+      }, 600);
+
+      // Fast 60fps PPG pulse animation
+      function animateWaveforms() {
+        state.wavePhase += (state.bpm / 60) * 0.14;
+        // Synthetic PPG waveform (systolic peak + dicrotic notch)
+        const t = state.wavePhase % (Math.PI * 2);
+        let pulse = Math.sin(t) * 0.5;
+        if (t > 0.5 && t < 1.3) pulse += Math.sin((t - 0.5) * Math.PI / 0.8) * 1.4;
+        if (t > 1.5 && t < 2.2) pulse += Math.sin((t - 1.5) * Math.PI / 0.7) * 0.45;
+
+        state.hrHistory.push(pulse);
+        if (state.hrHistory.length > 90) state.hrHistory.shift();
+
+        // Blink center PPG green emitter in sync with heartbeat
+        const emitter = document.getElementById('ppg-emitter');
+        if (emitter) {
+          emitter.setAttribute('opacity', pulse > 0.9 ? '1' : '0.45');
+        }
+
+        drawHrCanvas();
+        drawGsrCanvas();
+        requestAnimationFrame(animateWaveforms);
+      }
+      requestAnimationFrame(animateWaveforms);
+    }
+
+    function drawHrCanvas() {
+      const canvas = document.getElementById('hr-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0) return;
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#E07A94';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+
+      state.hrHistory.forEach((val, idx) => {
+        const x = (idx / (state.hrHistory.length - 1)) * w;
+        const y = h * 0.62 - val * (h * 0.25);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    function drawGsrCanvas() {
+      const canvas = document.getElementById('gsr-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0) return;
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.beginPath();
+      state.gsrHistory.forEach((val, idx) => {
+        const x = (idx / (state.gsrHistory.length - 1)) * w;
+        const y = h - (val / 100) * (h * 0.8) - 6;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = '#8C88CE';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(184, 181, 232, 0.22)';
+      ctx.fill();
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. WEB SERIAL API (XIAO ESP32-C3 USB CONNECTION)
+    // -------------------------------------------------------------------------
+    async function toggleWebSerial() {
+      if (!('serial' in navigator)) {
+        showToast('현재 브라우저는 Web Serial을 지원하지 않습니다. Chrome/Edge에서 USB 연결이 가능합니다.');
+        return;
+      }
+
+      if (state.isSerialConnected && state.serialPort) {
+        try {
+          await state.serialPort.close();
+        } catch (e) {}
+        state.isSerialConnected = false;
+        updateConnectionUI(false);
+        showToast('XIAO ESP32-C3 연결이 해제되었습니다.');
+        return;
+      }
+
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        state.serialPort = port;
+        state.isSerialConnected = true;
+        updateConnectionUI(true);
+        showToast('XIAO ESP32-C3 보드가 성공적으로 연결되었습니다!', 'success');
+
+        const textDecoder = new TextDecoderStream();
+        port.readable.pipeTo(textDecoder.writable);
+        const reader = textDecoder.readable.getReader();
+
+        let buffer = '';
+        while (state.isSerialConnected) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            parseSerialData(line.trim());
+          }
+        }
+      } catch (err) {
+        showToast('USB 연결이 취소되었거나 포트를 열 수 없습니다.');
+      }
+    }
+
+    function parseSerialData(line) {
+      // Expected format from XIAO ESP32-C3: "BPM:78,GSR:45,BTN:1"
+      if (!line) return;
+      const parts = line.split(',');
+      parts.forEach(part => {
+        const [k, v] = part.split(':');
+        if (k === 'BPM' && !isNaN(Number(v))) state.bpm = Number(v);
+        if (k === 'GSR' && !isNaN(Number(v))) {
+          state.gsrRaw = Number(v);
+          state.gsr = Math.min(100, Math.max(0, Math.round((state.gsrRaw / 4095) * 100)));
+        }
+        if (k === 'BTN' && v === '1') {
+          handleTactilePress();
+        }
+      });
+    }
+
+    function updateConnectionUI(connected) {
+      const dot = document.getElementById('connection-dot');
+      const label = document.getElementById('connection-label');
+      const badge = document.getElementById('data-source-badge');
+
+      if (connected) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        label.textContent = 'XIAO 연결됨';
+        badge.textContent = '실시간 하드웨어 수신 중';
+        badge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+        label.textContent = 'XIAO USB 연결';
+        badge.textContent = '시뮬레이션 모드 활성';
+        badge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-lavender-light text-lavender-dark';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. AI EMOTIONAL WELLNESS CHAT & ROUTINE PRESCRIPTION
+    // -------------------------------------------------------------------------
+    function sendPresetConcern(text) {
+      document.getElementById('ai-chat-input').value = text;
+      handleAiChatSubmit(new Event('submit'));
+    }
+
+    function handleAiChatSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('ai-chat-input');
+      const userText = input.value.trim();
+      if (!userText) return;
+
+      appendChatBubble('user', userText);
+      input.value = '';
+
+      setTimeout(() => {
+        const prescription = generateAiPrescription(userText);
+        appendAiPrescriptionBubble(prescription);
+      }, 450);
+    }
+
+    function generateAiPrescription(text) {
+      if (text.includes('면접') || text.includes('시험') || text.includes('떨') || text.includes('긴장')) {
+        return {
+          empathy: '중요한 순간을 앞두고 심장이 빨라지는 건 그만큼 진심으로 준비했다는 증거예요. 먼저 교감신경의 흥분을 가라앉혀 볼까요?',
+          routineKey: '478',
+          routineTitle: '4-7-8 긴장 완화 호흡 (벚꽃 블러쉬 LED)',
+          reason: '날숨(8초)을 들숨보다 두 배 길게 가져가면 심박수가 빠르게 안정됩니다.'
+        };
+      } else if (text.includes('업무') || text.includes('집중') || text.includes('복잡') || text.includes('공부')) {
+        return {
+          empathy: '해야 할 일이 한꺼번에 몰리면 뇌가 과부하를 느끼기 쉬워요. 딱 1분만 호흡의 리듬을 일정하게 맞춰 머리를 비워보세요.',
+          routineKey: 'box',
+          routineTitle: '4-4-4-4 박스 집중 호흡 (라벤더 미스트 LED)',
+          reason: '동일한 박자의 호흡은 산만해진 주의력을 현재 순간으로 되돌려 줍니다.'
+        };
+      } else {
+        return {
+          empathy: '오늘 하루 마음을 많이 쓰셨군요. BLOOMI의 은은한 세이지 민트 불빛을 바라보며 깊은 휴식을 선물해 주세요.',
+          routineKey: 'calm',
+          routineTitle: '5-5 공명 밸런스 호흡 (세이지 민트 LED)',
+          reason: '분당 6회의 느린 호흡은 부교감 신경을 깨워 마음의 여유를 회복시킵니다.'
+        };
+      }
+    }
+
+    function appendChatBubble(sender, text) {
+      const feed = document.getElementById('ai-chat-feed');
+      const wrapper = document.createElement('div');
+      wrapper.className = sender === 'user' ? 'flex justify-end' : 'flex items-start gap-3';
+
+      if (sender === 'user') {
+        wrapper.innerHTML = `
+          <div class="bg-charcoal text-white rounded-2xl rounded-tr-none px-4 py-3 max-w-md text-sm leading-relaxed shadow-2xs">
+            ${escapeHtml(text)}
+          </div>
+        `;
+      }
+      feed.appendChild(wrapper);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function appendAiPrescriptionBubble(p) {
+      const feed = document.getElementById('ai-chat-feed');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-start gap-3';
+      wrapper.innerHTML = `
+        <div class="w-8 h-8 rounded-xl bg-blush-light text-blush-dark flex items-center justify-center shrink-0 font-bold text-xs">🌸</div>
+        <div class="bg-white border border-stone-200/80 rounded-2xl rounded-tl-none p-4 max-w-xl shadow-2xs space-y-3">
+          <p class="text-sm text-charcoal leading-relaxed">${p.empathy}</p>
+          <div class="p-3.5 rounded-2xl bg-cream border border-stone-200/80 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-blush-dark">✨ 추천 루틴 처방</span>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white text-charcoal">${ROUTINES[p.routineKey].name}</span>
+            </div>
+            <p class="font-bold text-sm text-charcoal">${p.routineTitle}</p>
+            <p class="text-xs text-stone-500">${p.reason}</p>
+            <button onclick="applyAiRoutine('${p.routineKey}')" class="mt-1 w-full py-2.5 px-4 rounded-xl bg-charcoal hover:bg-stone-800 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5">
+              <span>키링으로 바로 실행하기</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      `;
+      feed.appendChild(wrapper);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function applyAiRoutine(routineKey) {
+      switchTab('studio');
+      selectRoutine(routineKey);
+      if (!state.isBreathing) startBreathingSession();
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. DATA LOGGING & WEEKLY REPORT CHART
+    // -------------------------------------------------------------------------
+    function logQuickSession(moodLabel) {
+      const now = new Date();
+      const timeStr = `오늘 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const beforeBpm = Math.max(state.bpm + 12, 86);
+      const afterBpm = state.bpm;
+
+      state.logs.unshift({
+        time: timeStr,
+        routine: ROUTINES[state.routineKey].name,
+        bpmBefore: beforeBpm,
+        bpmAfter: afterBpm,
+        mood: moodLabel
+      });
+
+      document.getElementById('stat-total-sessions').textContent = `${state.logs.length + 9}회`;
+      showToast(`'${moodLabel}' 상태가 웰니스 리포트에 저장되었습니다!`, 'success');
+    }
+
+    function renderSessionLogs() {
+      const list = document.getElementById('session-log-list');
+      if (!list) return;
+      list.innerHTML = state.logs.map(item => `
+        <div class="p-3.5 rounded-2xl bg-white border border-stone-200/70 flex items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-charcoal">${item.routine}</span>
+              <span class="text-[11px] text-stone-400">${item.time}</span>
+            </div>
+            <p class="text-xs text-stone-500 mt-0.5">심박 변화: <strong>${item.bpmBefore}</strong> → <strong class="text-sage-dark">${item.bpmAfter} BPM</strong></p>
+          </div>
+          <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-cream border border-stone-200 text-charcoal shrink-0">
+            ${item.mood}
+          </span>
+        </div>
+      `).join('');
+    }
+
+    function renderWeeklyChart() {
+      const canvas = document.getElementById('weekly-chart-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0) return;
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const days = ['월', '화', '수', '목', '금', '토', '일'];
+      const beforeData = [92, 88, 95, 90, 94, 82, 85];
+      const afterData = [76, 74, 78, 73, 75, 69, 71];
+
+      const padding = 28;
+      const chartW = w - padding * 2;
+      const chartH = h - padding * 1.6;
+      const groupW = chartW / days.length;
+      const barW = Math.min(16, groupW * 0.28);
+
+      days.forEach((day, i) => {
+        const cx = padding + i * groupW + groupW / 2;
+
+        // Before Bar (Blush)
+        const hBefore = ((beforeData[i] - 50) / 60) * chartH;
+        ctx.fillStyle = '#F4A6B8';
+        ctx.beginPath();
+        ctx.roundRect(cx - barW - 2, h - padding - hBefore, barW, hBefore, 5);
+        ctx.fill();
+
+        // After Bar (Sage)
+        const hAfter = ((afterData[i] - 50) / 60) * chartH;
+        ctx.fillStyle = '#8FB996';
+        ctx.beginPath();
+        ctx.roundRect(cx + 2, h - padding - hAfter, barW, hAfter, 5);
+        ctx.fill();
+
+        // Day Label
+        ctx.fillStyle = '#78716C';
+        ctx.font = '11px "Noto Sans KR", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(day, cx, h - 8);
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 9. INITIALIZE ON LOAD
+    // -------------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      startTelemetryLoop();
+      renderSessionLogs();
+    });
+
+    window.addEventListener('resize', () => {
+      if (state.activeTab === 'report') renderWeeklyChart();
+    });
+  </script>
+</body>
+</html>
