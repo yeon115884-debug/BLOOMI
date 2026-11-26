@@ -20,8 +20,9 @@
  *    >>> 기준선 측정 시작 / >>> 기준선 측정 취소 / >>> 기준선 측정 실패
  *    >>> 기준선 저장 완료: 87 BPM / GSR 2810
  *
- * ── 웹에서 받을 수 있는 명령 (지금 웹은 아직 안 보냄, 나중을 위해 미리 준비) ──
- *    start / stop / calib    (줄바꿈으로 끝나는 글자)
+ * ── 웹에서 받는 명령 (줄바꿈으로 끝나는 글자) ──
+ *    start  호흡 시작      stop   호흡 종료
+ *    calib  기준선 초기화 + 30초 측정      cancel 기준선 측정 취소
  *    시리얼 모니터 입력창에 직접 쳐서 테스트해도 돼요.
  *
  * 필요 라이브러리: Adafruit NeoPixel  /  보드: XIAO_ESP32C3
@@ -147,6 +148,7 @@ void readCommands() {
     if      (!strcmp(buf, "start")) startSession();
     else if (!strcmp(buf, "stop"))  endSession();
     else if (!strcmp(buf, "calib")) startCalib();
+    else if (!strcmp(buf, "cancel")) cancelCalib();
   }
 }
 

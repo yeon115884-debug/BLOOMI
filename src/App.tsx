@@ -29,6 +29,7 @@ interface SerialPortLike {
   open: (options: {baudRate: number}) => Promise<void>;
   close: () => Promise<void>;
   readable: ReadableStream<Uint8Array> | null;
+  writable: WritableStream<Uint8Array> | null;
 }
 
 interface NavigatorWithSerial extends Navigator {
@@ -91,6 +92,13 @@ export default function App() {
   const simScenarioRef = useRef(simScenario);
   const serialPortRef = useRef<SerialPortLike | null>(null);
   const serialReaderRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
+  // 웹 → 꽃(기기) 명령 전송용 (start / stop / calib / cancel)
+  const serialWriterRef = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
+  // 꽃 LED가 지금 보여주는 판단 (0 초록 / 1 노랑 / 2 빨강, null = 아직 없음)
+  const [deviceLevel, setDeviceLevel] = useState<number | null>(null);
+  const baselineStatusRef = useRef(baselineStatus);
+  const autoStartAfterBaselineRef = useRef(autoStartAfterBaseline);
+  const lastSentBreathingRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     bpmRef.current = bpm;
@@ -124,12 +132,31 @@ export default function App() {
     simScenarioRef.current = simScenario;
   }, [simScenario]);
 
+  useEffect(() => {
+    baselineStatusRef.current = baselineStatus;
+  }, [baselineStatus]);
+
+  useEffect(() => {
+    autoStartAfterBaselineRef.current = autoStartAfterBaseline;
+  }, [autoStartAfterBaseline]);
+
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'info') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts((prev) => [...prev, {id, message, type}]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
+  }, []);
+
+  // 꽃(기기)으로 명령 한 줄 보내기. 연결 안 됐으면 아무것도 안 함.
+  const sendSerialCommand = useCallback(async (command: string) => {
+    const writer = serialWriterRef.current;
+    if (!writer) return;
+    try {
+      await writer.write(new TextEncoder().encode(`${command}\n`));
+    } catch {
+      // 케이블이 빠진 경우 등은 읽기 루프 쪽에서 연결 해제로 처리됨
+    }
   }, []);
 
   const startBreathingSession = useCallback(
@@ -193,6 +220,24 @@ export default function App() {
     setBaselineRemaining(BASELINE_DURATION_SECONDS);
     showToast('초기 생체신호 측정이 중단되었습니다.');
   }, [showToast]);
+
+  // 화면의 '기준선 측정' 버튼: 꽃이 연결돼 있으면 꽃이 직접 재도록 calib 전송
+  // (꽃이 ">>> 기준선 측정 시작"을 보내면 아래 파서가 화면 상태를 맞춤)
+  const handleStartBaseline = useCallback(() => {
+    if (isSerialRef.current && serialWriterRef.current) {
+      void sendSerialCommand('calib');
+      showToast('꽃에서 30초 기준선 측정을 시작합니다. 검지와 GSR 전극을 그대로 두세요.');
+      return;
+    }
+    startBaselineMeasurement();
+  }, [sendSerialCommand, showToast, startBaselineMeasurement]);
+
+  const handleCancelBaseline = useCallback(() => {
+    if (isSerialRef.current && serialWriterRef.current) {
+      void sendSerialCommand('cancel');
+    }
+    cancelBaselineMeasurement();
+  }, [cancelBaselineMeasurement, sendSerialCommand]);
 
   const handleSelectRoutine = useCallback(
     (key: RoutineKey) => {
@@ -309,6 +354,9 @@ export default function App() {
       );
       setBaselineLiveAvg({bpm: avgBpm, gsr: avgGsr, count: samples.bpms.length});
 
+      // 꽃이 연결돼 있으면 꽃이 측정·저장을 담당 (남은 시간은 JSON calibSec, 완료는 "기준선 저장 완료" 문장)
+      if (isSerialRef.current) return;
+
       setBaselineRemaining((prev) => {
         if (prev <= 1) {
           const now = new Date();
@@ -388,6 +436,21 @@ export default function App() {
 
     return () => window.clearInterval(timer);
   }, [audioEnabled, cycleCount, isBreathing, phaseElapsed, phaseIndex, routineKey, showToast]);
+
+  // 화면 호흡 상태 → 꽃 LED 동기화 (꽃 버튼으로 시작한 경우엔 꽃이 이미 같은 상태라 무시됨)
+  useEffect(() => {
+    if (!isSerialConnected) {
+      lastSentBreathingRef.current = null;
+      return;
+    }
+    if (lastSentBreathingRef.current === null && !isBreathing) {
+      lastSentBreathingRef.current = false; // 연결 직후엔 꽃 상태를 건드리지 않음
+      return;
+    }
+    if (lastSentBreathingRef.current === isBreathing) return;
+    lastSentBreathingRef.current = isBreathing;
+    void sendSerialCommand(isBreathing ? 'start' : 'stop');
+  }, [isBreathing, isSerialConnected, sendSerialCommand]);
 
   // 600ms biometric telemetry simulator loop
   useEffect(() => {
@@ -499,7 +562,22 @@ export default function App() {
             buttonPressed?: unknown;
             session?: unknown;
             calibrating?: unknown;
+            calibSec?: unknown;
+            level?: unknown;
           };
+
+          // 꽃 LED 판단 (0 초록 / 1 노랑 / 2 빨강)
+          if (typeof data.level === 'number' && Number.isFinite(data.level)) {
+            setDeviceLevel(data.level);
+          }
+          // 꽃이 기준선을 재는 중이면 남은 시간을 꽃 기준으로 표시
+          if (
+            data.calibrating === 1 &&
+            typeof data.calibSec === 'number' &&
+            baselineStatusRef.current === 'measuring'
+          ) {
+            setBaselineRemaining(Math.max(0, BASELINE_DURATION_SECONDS - data.calibSec));
+          }
 
           if (typeof data.bpm === 'number' && Number.isFinite(data.bpm)) {
             setBpm(Math.max(0, Math.round(data.bpm)));
@@ -570,7 +648,7 @@ export default function App() {
       } else if (line.includes('기준선 측정 시작')) {
         startBaselineMeasurement();
       } else if (line.includes('기준선 측정 취소') || line.includes('기준선 측정 실패')) {
-        cancelBaselineMeasurement();
+        if (baselineStatusRef.current === 'measuring') cancelBaselineMeasurement();
       } else if (line.includes('기준선 저장 완료')) {
         const baseMatch = line.match(/기준선 저장 완료:\s*(\d+)\s*BPM/);
         if (baseMatch) {
@@ -588,11 +666,17 @@ export default function App() {
             recommendedRoutine: '478',
           });
           setBaselineStatus('complete');
+          sessionStartBpmRef.current = savedBpm;
+          showToast(`꽃에서 기준선 저장 완료 (${savedBpm} BPM)`, 'success');
+          if (autoStartAfterBaselineRef.current && !isBreathingRef.current) {
+            startBreathingSession();
+          }
         }
       }
     },
     [
       cancelBaselineMeasurement,
+      showToast,
       startBaselineMeasurement,
       startBreathingSession,
       stopBreathingSession,
@@ -618,8 +702,15 @@ export default function App() {
       } catch {
         // Ignore close errors
       }
+      try {
+        await serialWriterRef.current?.close();
+      } catch {
+        // Ignore writer close errors
+      }
+      serialWriterRef.current = null;
       serialReaderRef.current = null;
       serialPortRef.current = null;
+      setDeviceLevel(null);
       setIsSerialConnected(false);
       showToast('XIAO ESP32-C3 연결이 해제되었습니다.');
       return;
@@ -629,6 +720,7 @@ export default function App() {
       const port = await nav.serial.requestPort();
       await port.open({baudRate: 115200});
       serialPortRef.current = port;
+      serialWriterRef.current = port.writable ? port.writable.getWriter() : null;
       setIsSerialConnected(true);
       isSerialRef.current = true;
       showToast('XIAO ESP32-C3 보드가 성공적으로 연결되었습니다!', 'success');
@@ -652,6 +744,8 @@ export default function App() {
         }
       }
     } catch {
+      serialWriterRef.current = null;
+      setDeviceLevel(null);
       setIsSerialConnected(false);
       isSerialRef.current = false;
       showToast('USB 연결이 취소되었거나 포트를 열 수 없습니다.');
@@ -688,6 +782,7 @@ export default function App() {
         activeTab={activeTab}
         onSwitchTab={setActiveTab}
         isSerialConnected={isSerialConnected}
+        deviceLevel={deviceLevel}
         onToggleSerial={() => void handleToggleWebSerial()}
       />
 
@@ -723,8 +818,8 @@ export default function App() {
             onTactilePress={toggleBreathingSession}
             onToggleBreathing={toggleBreathingSession}
             onResetBreathing={resetBreathingSession}
-            onStartBaseline={startBaselineMeasurement}
-            onCancelBaseline={cancelBaselineMeasurement}
+            onStartBaseline={handleStartBaseline}
+            onCancelBaseline={handleCancelBaseline}
             onToggleAutoStartAfterBaseline={() => setAutoStartAfterBaseline((prev) => !prev)}
             onSelectRoutine={handleSelectRoutine}
             onLogSession={handleLogSession}

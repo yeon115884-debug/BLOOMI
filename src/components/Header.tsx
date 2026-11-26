@@ -4,6 +4,8 @@ interface HeaderProps {
   activeTab: TabId;
   onSwitchTab: (tab: TabId) => void;
   isSerialConnected: boolean;
+  /** 꽃 LED 판단: 0 초록 / 1 노랑 / 2 빨강 (연결 전이거나 아직 없으면 null) */
+  deviceLevel?: number | null;
   onToggleSerial: () => void;
 }
 
@@ -25,8 +27,17 @@ export function Header({
   activeTab,
   onSwitchTab,
   isSerialConnected,
+  deviceLevel = null,
   onToggleSerial,
 }: HeaderProps) {
+  const levelInfo =
+    deviceLevel === 2
+      ? {dot: 'bg-rose-500', label: '빨강'}
+      : deviceLevel === 1
+        ? {dot: 'bg-amber-400', label: '노랑'}
+        : deviceLevel === 0
+          ? {dot: 'bg-emerald-400', label: '초록'}
+          : null;
   return (
     <header className="sticky top-0 z-40 glass-card border-b border-stone-200/70">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -91,10 +102,18 @@ export function Header({
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                isSerialConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+                isSerialConnected
+                  ? (levelInfo?.dot ?? 'bg-emerald-400')
+                  : 'bg-amber-400 animate-pulse'
               }`}
             />
-            <span>{isSerialConnected ? 'XIAO 연결됨' : 'XIAO USB 연결'}</span>
+            <span>
+              {isSerialConnected
+                ? levelInfo
+                  ? `XIAO 연결됨 · 꽃 ${levelInfo.label}`
+                  : 'XIAO 연결됨'
+                : 'XIAO USB 연결'}
+            </span>
           </button>
         </div>
       </div>
