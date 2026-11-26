@@ -467,32 +467,137 @@ export default function App() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Web Serial parser for XIAO ESP32-C3 ("BPM:78,GSR:45,BTN:1")
+  // Web Serial 파서 (JSON, "BPM:78,GSR:1820,BTN:1", 및 기존 bloomi_v1.ino 로그 모두 지원)
   const parseSerialData = useCallback(
-    (line: string) => {
+    (rawLine: string) => {
+      const line = rawLine.trim();
       if (!line) return;
-      const parts = line.split(',');
-      parts.forEach((part) => {
-        const [k, v] = part.split(':');
-        if (k === 'BPM' && !Number.isNaN(Number(v))) {
-          setBpm(Number(v));
+
+      const applyGsrRaw = (raw: number) => {
+        if (!Number.isFinite(raw)) return;
+        const clampedRaw = Math.min(4095, Math.max(0, Math.round(raw)));
+        // Grove GSR은 긴장 시 저항(ADC)이 낮아지므로 반비례로 0~100 긴장도 환산
+        const normalized = Math.min(
+          100,
+          Math.max(0, Math.round(100 - (clampedRaw / 4095) * 100)),
+        );
+        setGsrRaw(clampedRaw);
+        setGsr(normalized);
+        gsrHistoryRef.current.push(normalized);
+        if (gsrHistoryRef.current.length > 60) {
+          gsrHistoryRef.current.shift();
         }
-        if (k === 'GSR' && !Number.isNaN(Number(v))) {
-          const raw = Number(v);
-          const normalized = Math.min(100, Math.max(0, Math.round((raw / 4095) * 100)));
-          setGsrRaw(raw);
-          setGsr(normalized);
-          gsrHistoryRef.current.push(normalized);
-          if (gsrHistoryRef.current.length > 60) {
-            gsrHistoryRef.current.shift();
+      };
+
+      // 1) JSON 포맷 처리: {"bpm":78,"gsr":45,"gsrRaw":1820,"buttonPressed":true}
+      if (line.startsWith('{') && line.endsWith('}')) {
+        try {
+          const data = JSON.parse(line) as {
+            bpm?: unknown;
+            gsr?: unknown;
+            gsrRaw?: unknown;
+            buttonPressed?: unknown;
+            session?: unknown;
+            calibrating?: unknown;
+          };
+
+          if (typeof data.bpm === 'number' && Number.isFinite(data.bpm)) {
+            setBpm(Math.max(0, Math.round(data.bpm)));
           }
+          if (typeof data.gsrRaw === 'number' && Number.isFinite(data.gsrRaw)) {
+            if (typeof data.gsr === 'number' && Number.isFinite(data.gsr)) {
+              const clampedGsr = Math.min(100, Math.max(0, Math.round(data.gsr)));
+              setGsrRaw(Math.round(data.gsrRaw));
+              setGsr(clampedGsr);
+              gsrHistoryRef.current.push(clampedGsr);
+              if (gsrHistoryRef.current.length > 60) gsrHistoryRef.current.shift();
+            } else {
+              applyGsrRaw(data.gsrRaw);
+            }
+          } else if (typeof data.gsr === 'number' && Number.isFinite(data.gsr)) {
+            const clampedGsr = Math.min(100, Math.max(0, Math.round(data.gsr)));
+            setGsr(clampedGsr);
+            gsrHistoryRef.current.push(clampedGsr);
+            if (gsrHistoryRef.current.length > 60) gsrHistoryRef.current.shift();
+          }
+
+          if (data.buttonPressed === true) {
+            toggleBreathingSession();
+          }
+          return;
+        } catch {
+          // JSON 파싱 실패 시 아래 텍스트 파서로 계속 진행
         }
-        if (k === 'BTN' && v === '1') {
-          toggleBreathingSession();
+      }
+
+      // 2) "BPM:78,GSR:1820,BTN:1" 포맷 처리
+      if (line.includes('BPM:') || line.includes('GSR:') || line.includes('BTN:')) {
+        const parts = line.split(',');
+        parts.forEach((part) => {
+          const [rawKey, rawVal] = part.split(':');
+          const k = rawKey?.trim();
+          const v = rawVal?.trim();
+          if (k === 'BPM' && v && !Number.isNaN(Number(v))) {
+            setBpm(Math.max(0, Math.round(Number(v))));
+          }
+          if (k === 'GSR' && v && !Number.isNaN(Number(v))) {
+            applyGsrRaw(Number(v));
+          }
+          if (k === 'BTN' && v === '1') {
+            toggleBreathingSession();
+          }
+        });
+        return;
+      }
+
+      // 3) 기존 bloomi_v1.ino 시리얼 로그 포맷 처리
+      // 예: "BPM= 72  기준선= 68  차이= +4  | 초록(평소)  | GSR=1820"
+      const bpmMatch = line.match(/BPM\s*=\s*(\d+)/i);
+      if (bpmMatch) {
+        setBpm(Number(bpmMatch[1]));
+      }
+
+      const gsrMatch = line.match(/GSR\s*=\s*(\d+)/i);
+      if (gsrMatch) {
+        applyGsrRaw(Number(gsrMatch[1]));
+      }
+
+      // 보드 물리 버튼(D8) 이벤트 동기화
+      if (line.includes('호흡 세션 시작')) {
+        if (!isBreathingRef.current) startBreathingSession();
+      } else if (line.includes('호흡 세션 종료')) {
+        if (isBreathingRef.current) stopBreathingSession();
+      } else if (line.includes('기준선 측정 시작')) {
+        startBaselineMeasurement();
+      } else if (line.includes('기준선 측정 취소') || line.includes('기준선 측정 실패')) {
+        cancelBaselineMeasurement();
+      } else if (line.includes('기준선 저장 완료')) {
+        const baseMatch = line.match(/기준선 저장 완료:\s*(\d+)\s*BPM/);
+        if (baseMatch) {
+          const savedBpm = Number(baseMatch[1]);
+          const now = new Date();
+          const measuredAt = `${String(now.getHours()).padStart(2, '0')}:${String(
+            now.getMinutes(),
+          ).padStart(2, '0')}`;
+          setBaselineResult({
+            bpm: savedBpm,
+            gsr: gsrRef.current,
+            gsrRaw: gsrRawRef.current,
+            sampleCount: 60,
+            measuredAt,
+            recommendedRoutine: '478',
+          });
+          setBaselineStatus('complete');
         }
-      });
+      }
     },
-    [toggleBreathingSession],
+    [
+      cancelBaselineMeasurement,
+      startBaselineMeasurement,
+      startBreathingSession,
+      stopBreathingSession,
+      toggleBreathingSession,
+    ],
   );
 
   const handleToggleWebSerial = useCallback(async () => {
