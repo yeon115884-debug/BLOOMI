@@ -154,9 +154,9 @@ export function StudioTab({
     instructionText = '호흡이 일시정지되었습니다';
     subHintText = currentPhase.hint;
   } else if (baselineStatus === 'complete' && baselineResult) {
-    phaseBadgeText = '측정 완료';
-    instructionText = '호흡 가이드를 시작할 준비가 되었어요';
-    subHintText = `초기 기준선(${baselineResult.bpm} BPM · GSR ${baselineResult.gsr}) 측정 완료`;
+    phaseBadgeText = '기준선 설정 완료';
+    instructionText = '실시간 생체신호 변동 모니터링 중';
+    subHintText = `초기 기준(${baselineResult.bpm} BPM · GSR ${baselineResult.gsr}) 대비 일정 이상 변동 시 호흡을 추천합니다`;
   }
 
   // Draw live PPG + GSR waveforms smoothly on canvas
@@ -300,9 +300,9 @@ export function StudioTab({
             onChange={(e) => onChangeScenario(e.target.value as SimScenario)}
             className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 text-charcoal focus:outline-none focus:ring-2 focus:ring-blush cursor-pointer"
           >
-            <option value="tense">😰 시뮬레이션: 시험·면접 직전 긴장 (심박 급상승)</option>
-            <option value="pressure">😓 시뮬레이션: 머리 복잡·초조함 (GSR 상승)</option>
-            <option value="normal">🙂 시뮬레이션: 일상 업무 상태</option>
+            <option value="normal">🙂 시뮬레이션: 일상 업무 상태 (평상시 기준)</option>
+            <option value="tense">😰 시뮬레이션: 시험·면접 직전 긴장 (+15 BPM 이상 급상승)</option>
+            <option value="pressure">😓 시뮬레이션: 머리 복잡·초조함 (GSR +15 이상 상승)</option>
             <option value="relaxed">🌿 시뮬레이션: 호흡 후 깊은 이완</option>
           </select>
         </div>
@@ -351,13 +351,13 @@ export function StudioTab({
 
               {baselineStatus === 'idle' && (
                 <p className="text-xs text-stone-500 mt-0.5">
-                  호흡을 시작하기 전 30초 동안 사용자의 GSR(긴장도)과 심박수(BPM)를 입력받아 맞춤 호흡을 추천합니다.
+                  처음 30초 동안 평상시 GSR과 심박수(BPM) 기준선을 측정합니다. 초기 측정만으로 호흡을 추천하지 않으며, 이후 현재 센서 수치가 기준 대비 일정 이상 변동될 때만 호흡을 추천합니다.
                 </p>
               )}
 
               {isMeasuringBaseline && (
                 <p className="text-xs text-stone-600 mt-0.5 tabular-nums">
-                  실시간 수집 중 ({baselineLiveAvg.count}개 샘플) · 현재 평균{' '}
+                  실시간 기준선 수집 중 ({baselineLiveAvg.count}개 샘플) · 현재 평균{' '}
                   <strong>{baselineLiveAvg.bpm} BPM</strong> · 평균 GSR{' '}
                   <strong>{baselineLiveAvg.gsr} / 100</strong>
                 </p>
@@ -365,11 +365,9 @@ export function StudioTab({
 
               {baselineStatus === 'complete' && baselineResult && (
                 <p className="text-xs text-stone-600 mt-0.5 tabular-nums">
-                  초기 측정 결과: 평균 <strong>{baselineResult.bpm} BPM</strong> · GSR{' '}
-                  <strong>{baselineResult.gsr} / 100</strong> → 추천 루틴:{' '}
-                  <strong className="text-blush-dark">
-                    {ROUTINES[baselineResult.recommendedRoutine].name}
-                  </strong>
+                  초기 30초 기준선: 평균 <strong>{baselineResult.bpm} BPM</strong> · GSR{' '}
+                  <strong>{baselineResult.gsr} / 100</strong> (ADC {baselineResult.gsrRaw}) — 현재
+                  실시간 측정치와 비교해 일정 이상 변동 시에만 호흡을 추천합니다.
                 </p>
               )}
             </div>
@@ -644,13 +642,15 @@ export function StudioTab({
                 return (
                   <div className="px-3 py-2 rounded-2xl bg-stone-50 border border-stone-200/70 flex items-center justify-between gap-2 text-xs text-stone-500">
                     <span>
-                      💡 초기 30초 측정을 완료하면 기준 대비 실시간 <strong>추천 호흡 리듬</strong>이 여기에 표시됩니다.
+                      💡 초기 30초 기준선을 측정한 뒤, 현재 BPM·GSR이 기준 대비 일정 이상 변동될 때만{' '}
+                      <strong>추천 호흡 리듬</strong>이 표시됩니다.
                     </span>
                   </div>
                 );
               }
 
               const bpmDelta = bpm - baselineResult.bpm;
+              const gsrDelta = gsr - baselineResult.gsr;
               const gsrPctDelta =
                 baselineResult.gsr > 0
                   ? Math.round(((gsr - baselineResult.gsr) / baselineResult.gsr) * 100)
@@ -658,12 +658,14 @@ export function StudioTab({
               const adcDrop = baselineResult.gsrRaw - gsrRaw;
 
               let recKey: '478' | 'box' | null = null;
-              let recTitle = '안정 범위 유지 중';
-              let recSub = '현재 호흡이 편안합니다';
-              let recReason = `기준(${baselineResult.bpm} BPM · GSR ${baselineResult.gsr}) 대비 ${
+              let recTitle = '호흡 추천 없음 · 기준 범위 내 안정';
+              let recSub = '일정 이상의 변동 미감지';
+              let recReason = `현재 기준(${baselineResult.bpm} BPM · GSR ${baselineResult.gsr}) 대비 ${
                 bpmDelta >= 0 ? '+' : ''
-              }${bpmDelta} BPM · GSR ${gsrPctDelta >= 0 ? '+' : ''}${gsrPctDelta}%`;
-              let bannerCls = 'bg-sage-light/65 border-sage/35 text-charcoal';
+              }${bpmDelta} BPM · GSR ${gsrDelta >= 0 ? '+' : ''}${gsrDelta} (${
+                gsrPctDelta >= 0 ? '+' : ''
+              }${gsrPctDelta}%)`;
+              let bannerCls = 'bg-stone-50 border-stone-200/80 text-charcoal';
               let dotCls = 'bg-sage-dark';
 
               if (bpmDelta >= 15) {
@@ -673,13 +675,11 @@ export function StudioTab({
                 recReason = `초기 평균 대비 +${bpmDelta} BPM 급상승 (≥ +15 BPM)`;
                 bannerCls = 'bg-blush-light/70 border-blush/40 text-charcoal';
                 dotCls = 'bg-blush-dark';
-              } else if (bpmDelta <= 14 && (gsrPctDelta >= 15 || adcDrop >= 60)) {
+              } else if (bpmDelta <= 14 && (gsrDelta >= 15 || gsrPctDelta >= 15 || adcDrop >= 60)) {
                 recKey = 'box';
                 recTitle = '4-4-4-4 박스 추천';
                 recSub = '집중력 회복·정신적 압박';
-                recReason = `심박 ${bpmDelta >= 0 ? '+' : ''}${bpmDelta} BPM 유지 · GSR 긴장도 ${
-                  gsrPctDelta >= 0 ? `+${gsrPctDelta}%` : `ADC -${adcDrop}`
-                }`;
+                recReason = `심박 ${bpmDelta >= 0 ? '+' : ''}${bpmDelta} BPM (≤+14) · GSR +${gsrDelta} (+${gsrPctDelta}%, ADC -${adcDrop})`;
                 bannerCls = 'bg-lavender-light/80 border-lavender/45 text-charcoal';
                 dotCls = 'bg-lavender-dark';
               }
@@ -714,6 +714,7 @@ export function StudioTab({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(() => {
                 const bpmDelta = baselineResult ? bpm - baselineResult.bpm : 0;
+                const gsrDelta = baselineResult ? gsr - baselineResult.gsr : 0;
                 const gsrPctDelta =
                   baselineResult && baselineResult.gsr > 0
                     ? Math.round(((gsr - baselineResult.gsr) / baselineResult.gsr) * 100)
@@ -723,7 +724,7 @@ export function StudioTab({
                 const isBoxRecommended = Boolean(
                   baselineResult &&
                     bpmDelta <= 14 &&
-                    (gsrPctDelta >= 15 || adcDrop >= 60),
+                    (gsrDelta >= 15 || gsrPctDelta >= 15 || adcDrop >= 60),
                 );
 
                 return (
@@ -789,7 +790,7 @@ export function StudioTab({
             </div>
 
             <p className="text-[11px] text-stone-400">
-              매핑 기준: 초기 30초 대비 +15 BPM↑ → 4-7-8 호흡 · +14 BPM↓ &amp; GSR +15%↑ → 4-4-4-4 박스
+              추천 조건 (초기 30초 기준선 대비): +15 BPM↑ → 4-7-8 호흡 · +14 BPM 이하 유지 &amp; GSR +15%↑(ADC 60↓) → 4-4-4-4 박스
             </p>
           </div>
 

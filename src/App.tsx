@@ -54,16 +54,16 @@ export default function App() {
   // 30-second Initial GSR & BPM Intake State
   const [baselineStatus, setBaselineStatus] = useState<BaselineStatus>('idle');
   const [baselineRemaining, setBaselineRemaining] = useState(BASELINE_DURATION_SECONDS);
-  const [baselineLiveAvg, setBaselineLiveAvg] = useState({bpm: 92, gsr: 68, count: 0});
+  const [baselineLiveAvg, setBaselineLiveAvg] = useState({bpm: 75, gsr: 45, count: 0});
   const [baselineResult, setBaselineResult] = useState<BaselineMeasurement | null>(null);
-  const [autoStartAfterBaseline, setAutoStartAfterBaseline] = useState(true);
+  const [autoStartAfterBaseline, setAutoStartAfterBaseline] = useState(false);
 
   // Biometrics & Hardware Serial State
   const [isSerialConnected, setIsSerialConnected] = useState(false);
-  const [simScenario, setSimScenario] = useState<SimScenario>('tense');
-  const [bpm, setBpm] = useState(92);
-  const [gsr, setGsr] = useState(68);
-  const [gsrRaw, setGsrRaw] = useState(2410);
+  const [simScenario, setSimScenario] = useState<SimScenario>('normal');
+  const [bpm, setBpm] = useState(75);
+  const [gsr, setGsr] = useState(45);
+  const [gsrRaw, setGsrRaw] = useState(2370);
   const [pulseHighlight, setPulseHighlight] = useState(false);
 
   // Persisted Wellness Logs
@@ -72,7 +72,7 @@ export default function App() {
 
   // Refs for real-time loops & Serial reader
   const hrHistoryRef = useRef<number[]>(Array.from({length: 90}, () => 0));
-  const gsrHistoryRef = useRef<number[]>(Array.from({length: 60}, () => 68));
+  const gsrHistoryRef = useRef<number[]>(Array.from({length: 60}, () => 45));
   const wavePhaseRef = useRef(0);
   const bpmRef = useRef(bpm);
   const gsrRef = useRef(gsr);
@@ -86,6 +86,8 @@ export default function App() {
   });
   const isSerialRef = useRef(isSerialConnected);
   const isBreathingRef = useRef(isBreathing);
+  const routineKeyRef = useRef(routineKey);
+  const baselineResultRef = useRef(baselineResult);
   const simScenarioRef = useRef(simScenario);
   const serialPortRef = useRef<SerialPortLike | null>(null);
   const serialReaderRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
@@ -109,6 +111,14 @@ export default function App() {
   useEffect(() => {
     isBreathingRef.current = isBreathing;
   }, [isBreathing]);
+
+  useEffect(() => {
+    routineKeyRef.current = routineKey;
+  }, [routineKey]);
+
+  useEffect(() => {
+    baselineResultRef.current = baselineResult;
+  }, [baselineResult]);
 
   useEffect(() => {
     simScenarioRef.current = simScenario;
@@ -305,34 +315,30 @@ export default function App() {
           const measuredAt = `${String(now.getHours()).padStart(2, '0')}:${String(
             now.getMinutes(),
           ).padStart(2, '0')}`;
-          const recommendedRoutine: Exclude<RoutineKey, 'calm'> =
-            avgBpm >= 85 || avgGsr < 58 ? (avgBpm >= 85 ? '478' : 'box') : '478';
-
           setBaselineResult({
             bpm: avgBpm,
             gsr: avgGsr,
             gsrRaw: avgGsrRaw,
             sampleCount: samples.bpms.length,
             measuredAt,
-            recommendedRoutine,
           });
           setBaselineStatus('complete');
           sessionStartBpmRef.current = avgBpm;
           sessionStartGsrRef.current = avgGsr;
-          setRoutineKey(recommendedRoutine);
 
           showToast(
-            `30초 측정 완료 (평균 ${avgBpm} BPM · GSR ${avgGsr}). 초기 기준선이 저장되었습니다.`,
+            `30초 기준선 저장 완료 (${avgBpm} BPM · GSR ${avgGsr}). 이후 실시간 변동 감지 시 호흡을 추천합니다.`,
             'success',
           );
 
           if (autoStartAfterBaseline) {
+            const currentKey = routineKeyRef.current;
             setIsCompleted(false);
             setCycleCount(1);
             setPhaseIndex(0);
             setPhaseElapsed(0);
             setIsBreathing(true);
-            void playPhaseChime(ROUTINES[recommendedRoutine].phases[0].label, audioEnabled);
+            void playPhaseChime(ROUTINES[currentKey].phases[0].label, audioEnabled);
           }
           return 0;
         }
@@ -387,30 +393,36 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (!isSerialRef.current) {
-        let targetBpm = 78;
+        const baseBpm = baselineResultRef.current?.bpm ?? 75;
+        const baseGsr = baselineResultRef.current?.gsr ?? 45;
+        let targetBpm = 75;
         let targetGsr = 45;
 
         if (simScenarioRef.current === 'tense') {
-          targetBpm = isBreathingRef.current ? 80 : 94;
-          targetGsr = isBreathingRef.current ? 52 : 72;
+          targetBpm = isBreathingRef.current
+            ? Math.max(75, baseBpm + 4)
+            : Math.min(132, Math.max(96, baseBpm + 20));
+          targetGsr = isBreathingRef.current ? Math.max(38, baseGsr) : Math.min(92, baseGsr + 10);
         } else if (simScenarioRef.current === 'pressure') {
-          targetBpm = isBreathingRef.current ? 75 : 82;
-          targetGsr = isBreathingRef.current ? 46 : 74;
+          targetBpm = isBreathingRef.current ? Math.max(72, baseBpm) : Math.min(115, baseBpm + 6);
+          targetGsr = isBreathingRef.current
+            ? Math.max(36, baseGsr)
+            : Math.min(96, Math.max(72, baseGsr + 22));
         } else if (simScenarioRef.current === 'normal') {
-          targetBpm = isBreathingRef.current ? 72 : 78;
-          targetGsr = isBreathingRef.current ? 38 : 46;
+          targetBpm = isBreathingRef.current ? 71 : 75;
+          targetGsr = isBreathingRef.current ? 36 : 45;
         } else if (simScenarioRef.current === 'relaxed') {
-          targetBpm = 68;
-          targetGsr = 28;
+          targetBpm = 66;
+          targetGsr = 26;
         }
 
         setBpm((prev) => {
-          const next = Math.round(prev + (targetBpm - prev) * 0.15 + (Math.random() * 2 - 1));
+          const next = Math.round(prev + (targetBpm - prev) * 0.25 + (Math.random() * 2 - 1));
           return Math.max(55, Math.min(140, next));
         });
 
         setGsr((prev) => {
-          const next = Math.round(prev + (targetGsr - prev) * 0.15 + (Math.random() * 2 - 1));
+          const next = Math.round(prev + (targetGsr - prev) * 0.25 + (Math.random() * 2 - 1));
           const clamped = Math.max(10, Math.min(100, next));
           setGsrRaw(Math.round(3000 - clamped * 14));
           gsrHistoryRef.current.push(clamped);

@@ -14,7 +14,6 @@ export interface BaselineMeasurement {
   gsrRaw: number;
   sampleCount: number;
   measuredAt: string;
-  recommendedRoutine: Exclude<RoutineKey, 'calm'>;
 }
 
 export interface BreathingPhase {
