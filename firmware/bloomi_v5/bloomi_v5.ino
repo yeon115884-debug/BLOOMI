@@ -101,7 +101,9 @@ void flashAll(uint8_t r, uint8_t g, uint8_t b, int times) {
 // ================= 상태 =================
 int baseline = 0, gsrBase = 0;
 float gsrNow = 0;
-bool session = false; uint32_t sessionStart = 0;
+bool session = false; uint32_t sessionStart = 0, sessionBeganAt = 0;
+uint8_t selectedRoutine = 0;
+uint32_t completedCounts[3] = {0, 0, 0};
 bool calibrating = false; uint32_t calibValidMs = 0; long calibSum = 0; int calibN = 0; double calibGsrSum = 0;
 // ---- 호흡 패턴 (웹이 pattern: 명령으로 바꿀 수 있음) ----
 struct Phase { uint32_t ms; uint8_t lv; uint8_t r, g, b; };
@@ -124,19 +126,25 @@ bool parsePattern(const char* text) {              // "4,100,F4A6B8;7,15,B8B5E8;
   if (n == 0) return false;
   for (int i = 0; i < n; i++) phases[i] = tmp[i];
   nPhases = n;
+  prefs.putUChar("nphase", nPhases);
+  prefs.putBytes("phases", phases, sizeof(Phase) * nPhases);
   return true;
 }
 
 void startSession() {
   if (session) return;
   calibrating = false;
-  session = true; sessionStart = millis();
+  session = true; sessionStart = sessionBeganAt = millis();
   Serial.println(">>> 호흡 세션 시작");
 }
-void endSession() {
+void endSession(bool completed = false) {
   if (!session) return;
   session = false;
-  Serial.println(">>> 호흡 세션 종료");
+  if (completed) {
+    completedCounts[selectedRoutine]++;
+    prefs.putUInt(selectedRoutine == 0 ? "done478" : selectedRoutine == 1 ? "donebox" : "donecalm", completedCounts[selectedRoutine]);
+  }
+  Serial.println(completed ? ">>> 호흡 세션 종료 (완료)" : ">>> 호흡 세션 종료");
 }
 void startCalib() {
   Serial.printf(">>> 기준선 초기화 (이전 값: 심박 %d / GSR %d)\n", baseline, gsrBase);
@@ -176,8 +184,12 @@ void readCommands() {
     buf[n] = 0; n = 0;
     if      (!strcmp(buf, "start")) startSession();
     else if (!strcmp(buf, "stop"))  endSession();
+    else if (!strcmp(buf, "complete")) endSession(true);
     else if (!strcmp(buf, "calib")) startCalib();
     else if (!strcmp(buf, "cancel")) cancelCalib();
+    else if (!strcmp(buf, "routine:478")) { selectedRoutine = 0; prefs.putUChar("routine", 0); }
+    else if (!strcmp(buf, "routine:box")) { selectedRoutine = 1; prefs.putUChar("routine", 1); }
+    else if (!strcmp(buf, "routine:calm")) { selectedRoutine = 2; prefs.putUChar("routine", 2); }
     else if (!strncmp(buf, "sync:", 5)) {
       int ph = 0, el = 0;
       if (session && sscanf(buf + 5, "%d,%d", &ph, &el) == 2 && ph >= 0 && ph < nPhases && el >= 0) {
@@ -189,7 +201,7 @@ void readCommands() {
     }
     else if (!strncmp(buf, "pattern:", 8)) {
       if (parsePattern(buf + 8)) {
-        if (session) sessionStart = millis();      // 호흡 중이면 첫 단계부터 다시
+        if (session) sessionStart = sessionBeganAt = millis();
         Serial.printf("# 호흡 패턴 적용: %d단계, 한 바퀴 %lu초\n", nPhases, (unsigned long)(cycleMs() / 1000));
       } else {
         Serial.println("# 호흡 패턴 형식 오류 (예: pattern:4,100,F4A6B8;7,15,B8B5E8;8,100,8FB996)");
@@ -204,6 +216,17 @@ void setup() {
   pinMode(PIN_BTN, INPUT_PULLUP);
   ring.begin(); ring.setBrightness(90); ring.show();
   prefs.begin("bloomi", false);
+  selectedRoutine = prefs.getUChar("routine", 0);
+  if (selectedRoutine > 2) selectedRoutine = 0;
+  completedCounts[0] = prefs.getUInt("done478", 0);
+  completedCounts[1] = prefs.getUInt("donebox", 0);
+  completedCounts[2] = prefs.getUInt("donecalm", 0);
+  uint8_t savedPhaseCount = prefs.getUChar("nphase", 0);
+  if (savedPhaseCount > 0 && savedPhaseCount <= MAX_PHASES &&
+      prefs.getBytesLength("phases") == sizeof(Phase) * savedPhaseCount) {
+    prefs.getBytes("phases", phases, sizeof(Phase) * savedPhaseCount);
+    nPhases = savedPhaseCount;
+  }
   baseline = prefs.getInt("base", 0);
   gsrBase  = prefs.getInt("gbase", 0);
   gsrNow   = analogRead(PIN_GSR);
@@ -216,6 +239,7 @@ void setup() {
 void loop() {
   uint32_t now = millis();
   readCommands();
+  if (session && now - sessionBeganAt >= cycleMs() * 4) endSession(true);
 
   // ---- 버튼 (50ms 동안 같은 값이어야 인정) : 짧게 = 호흡, 2초 = 기준선 ----
   static bool rawLast = false, pressed = false; static uint32_t rawFlipAt = 0;
@@ -303,10 +327,11 @@ void loop() {
     lastSend = now;
     Serial.printf("{\"bpm\":%d,\"gsrRaw\":%d,\"base\":%d,\"gsrBase\":%d,\"gsrPct\":%.1f,"
                   "\"hrPt\":%d,\"gsrPt\":%d,\"level\":%d,\"state\":\"%c\","
-                  "\"session\":%d,\"calibrating\":%d,\"calibSec\":%d,\"phase\":%d}\n",
+                  "\"session\":%d,\"calibrating\":%d,\"calibSec\":%d,\"phase\":%d,\"routine\":%u,\"done478\":%lu,\"doneBox\":%lu,\"doneCalm\":%lu}\n",
                   bpm, (int)gsrNow, baseline, gsrBase, gsrPct,
                   hrPt, gsrPt, level, st,
-                  session ? 1 : 0, calibrating ? 1 : 0, (int)(calibValidMs / 1000), curPhase);
+                  session ? 1 : 0, calibrating ? 1 : 0, (int)(calibValidMs / 1000), curPhase, selectedRoutine,
+                  (unsigned long)completedCounts[0], (unsigned long)completedCounts[1], (unsigned long)completedCounts[2]);
   }
   delay(2);
 }

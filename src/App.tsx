@@ -104,6 +104,11 @@ export default function App() {
   const serialWriterRef = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
   // 꽃 LED가 지금 보여주는 판단 (0 초록 / 1 노랑 / 2 빨강, null = 아직 없음)
   const [deviceLevel, setDeviceLevel] = useState<number | null>(null);
+  const [deviceReady, setDeviceReady] = useState(false);
+  const [deviceCompleted, setDeviceCompleted] = useState<[number, number, number] | null>(null);
+  const deviceReadyRef = useRef(false);
+  const lastPatternKeyRef = useRef<RoutineKey | null>(null);
+  const sessionEndRef = useRef<{bpm: number; gsr: number} | null>(null);
   const baselineStatusRef = useRef(baselineStatus);
   const autoStartAfterBaselineRef = useRef(autoStartAfterBaseline);
   const lastSentBreathingRef = useRef<boolean | null>(null);
@@ -173,8 +178,9 @@ export default function App() {
       setBaselineStatus((prev) => (prev === 'measuring' ? 'idle' : prev));
       setIsCompleted(false);
       if (cycleCount === 0 || isCompleted || overrideRoutine) {
-        sessionStartBpmRef.current = baselineResult?.bpm ?? bpmRef.current;
-        sessionStartGsrRef.current = baselineResult?.gsr ?? gsrRef.current;
+        sessionStartBpmRef.current = bpmRef.current;
+        sessionStartGsrRef.current = gsrRef.current;
+        sessionEndRef.current = null;
         setCycleCount(1);
         setPhaseIndex(0);
         setPhaseElapsed(0);
@@ -183,7 +189,7 @@ export default function App() {
       const firstPhase = ROUTINES[targetKey].phases[0];
       void playPhaseChime(firstPhase.label, audioEnabled);
     },
-    [audioEnabled, baselineResult, cycleCount, isCompleted, routineKey],
+    [audioEnabled, cycleCount, isCompleted, routineKey],
   );
 
   const stopBreathingSession = useCallback(() => {
@@ -207,6 +213,8 @@ export default function App() {
   }, []);
 
   const startBaselineMeasurement = useCallback(() => {
+    setBaselineResult(null);
+    baselineResultRef.current = null;
     setIsBreathing(false);
     setIsCompleted(false);
     setCycleCount(0);
@@ -269,6 +277,7 @@ export default function App() {
       setRoutineKey(key);
       sessionStartBpmRef.current = bpmRef.current;
       sessionStartGsrRef.current = gsrRef.current;
+      sessionEndRef.current = null;
       setIsCompleted(false);
       setCycleCount(1);
       setPhaseIndex(0);
@@ -302,15 +311,15 @@ export default function App() {
   }, []);
 
   const handleLogSession = useCallback(
-    (moodLabel: string) => {
+    (moodLabel: string, situation: 'interview' | 'study' | 'rest') => {
       const now = new Date();
       const timeStr = `오늘 ${String(now.getHours()).padStart(2, '0')}:${String(
         now.getMinutes(),
       ).padStart(2, '0')}`;
       const beforeBpm = sessionStartBpmRef.current ?? bpmRef.current;
-      const afterBpm = bpmRef.current;
+      const afterBpm = sessionEndRef.current?.bpm ?? bpmRef.current;
       const beforeGsr = sessionStartGsrRef.current ?? gsrRef.current;
-      const afterGsr = gsrRef.current;
+      const afterGsr = sessionEndRef.current?.gsr ?? gsrRef.current;
 
       const entry: WellnessSessionLog = {
         id: `log-${Date.now()}`,
@@ -323,6 +332,8 @@ export default function App() {
         gsrBefore: beforeGsr,
         gsrAfter: afterGsr,
         mood: moodLabel,
+        situation,
+        completed: isCompleted,
       };
 
       setLogs((prev) => {
@@ -332,7 +343,7 @@ export default function App() {
       });
       showToast(`'${moodLabel}' 상태가 웰니스 리포트에 저장되었습니다!`, 'success');
     },
-    [routineKey, showToast],
+    [routineKey, isCompleted, showToast],
   );
 
   const handleClearLogs = useCallback(() => {
@@ -343,7 +354,7 @@ export default function App() {
 
   // 30-second initial GSR & BPM measurement timer
   useEffect(() => {
-    if (baselineStatus !== 'measuring') return;
+    if (baselineStatus !== 'measuring' || isSerialConnected) return;
 
     const timer = window.setInterval(() => {
       const samples = baselineSamplesRef.current;
@@ -403,7 +414,7 @@ export default function App() {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [audioEnabled, autoStartAfterBaseline, baselineStatus, showToast]);
+  }, [audioEnabled, autoStartAfterBaseline, baselineStatus, isSerialConnected, showToast]);
 
   // Breathing 1-second timer engine
   useEffect(() => {
@@ -417,11 +428,13 @@ export default function App() {
         const nextPhaseIndex = phaseIndex + 1;
         if (nextPhaseIndex >= routine.phases.length) {
           if (cycleCount >= MAX_CYCLES) {
+            if (isSerialRef.current) void sendSerialCommand('complete');
+            sessionEndRef.current = {bpm: bpmRef.current, gsr: gsrRef.current};
             setIsBreathing(false);
             setIsCompleted(true);
             setPhaseIndex(0);
             setPhaseElapsed(0);
-            showToast('4사이클 호흡 완료! 심박과 긴장도가 완화되었습니다.', 'success');
+            showToast('4사이클 호흡 완료! 전후 측정값을 기록에서 확인해 보세요.', 'success');
             if (!isSerialRef.current) {
               setSimScenario('relaxed');
             }
@@ -443,15 +456,17 @@ export default function App() {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [audioEnabled, cycleCount, isBreathing, phaseElapsed, phaseIndex, routineKey, showToast]);
+  }, [audioEnabled, cycleCount, isBreathing, phaseElapsed, phaseIndex, routineKey, sendSerialCommand, showToast]);
 
   // 루틴이 바뀌거나 막 연결됐을 때 꽃에 호흡 패턴 전송
   // (아래 start 전송 효과보다 먼저 선언 → 같은 순간에 바뀌면 pattern → start 순서로 나감.
   //  호흡 중에 루틴을 바꾸면 꽃도 첫 단계부터 다시 시작해 화면과 맞춰짐)
   useEffect(() => {
-    if (!isSerialConnected) return;
+    if (!isSerialConnected || !deviceReady || lastPatternKeyRef.current === routineKey) return;
+    lastPatternKeyRef.current = routineKey;
+    void sendSerialCommand(`routine:${routineKey}`);
     void sendSerialCommand(buildPatternCommand(routineKey));
-  }, [isSerialConnected, routineKey, sendSerialCommand]);
+  }, [isSerialConnected, deviceReady, routineKey, sendSerialCommand]);
 
   // 화면 호흡 상태 → 꽃 LED 동기화 (꽃 버튼으로 시작한 경우엔 꽃이 이미 같은 상태라 무시됨)
   useEffect(() => {
@@ -510,7 +525,7 @@ export default function App() {
         setGsr((prev) => {
           const next = Math.round(prev + (targetGsr - prev) * 0.25 + (Math.random() * 2 - 1));
           const clamped = Math.max(10, Math.min(100, next));
-          setGsrRaw(Math.round(3000 - clamped * 14));
+          setGsrRaw(Math.round(4095 * (1 - clamped / 100)));
           gsrHistoryRef.current.push(clamped);
           if (gsrHistoryRef.current.length > 60) {
             gsrHistoryRef.current.shift();
@@ -587,7 +602,38 @@ export default function App() {
             calibrating?: unknown;
             calibSec?: unknown;
             level?: unknown;
+            base?: unknown;
+            gsrBase?: unknown;
+            routine?: unknown;
+            done478?: unknown;
+            doneBox?: unknown;
+            doneCalm?: unknown;
           };
+
+          if (!deviceReadyRef.current && typeof data.routine === 'number' && data.routine >= 0 && data.routine <= 2) {
+            deviceReadyRef.current = true;
+            const savedKey = (['478', 'box', 'calm'] as const)[data.routine];
+            lastPatternKeyRef.current = savedKey;
+            setRoutineKey(savedKey);
+            setDeviceReady(true);
+          }
+          if ([data.done478, data.doneBox, data.doneCalm].every((v) => typeof v === 'number' && Number.isInteger(v) && v >= 0)) {
+            setDeviceCompleted([data.done478 as number, data.doneBox as number, data.doneCalm as number]);
+          }
+
+          if (typeof data.base === 'number' && data.base >= 40 && data.base <= 180 &&
+              typeof data.gsrBase === 'number' && data.gsrBase > 0 && data.gsrBase <= 4095 &&
+              (baselineResultRef.current?.bpm !== data.base || baselineResultRef.current?.gsrRaw !== data.gsrBase)) {
+            const raw = Math.round(data.gsrBase);
+            const result: BaselineMeasurement = {
+              bpm: Math.round(data.base), gsrRaw: raw,
+              gsr: Math.round(100 - raw / 4095 * 100),
+              sampleCount: 60, measuredAt: new Date().toLocaleTimeString('ko-KR'),
+            };
+            baselineResultRef.current = result;
+            setBaselineResult(result);
+            setBaselineStatus('complete');
+          }
 
           // 꽃 LED 판단 (0 초록 / 1 노랑 / 2 빨강)
           if (typeof data.level === 'number' && Number.isFinite(data.level)) {
@@ -603,7 +649,7 @@ export default function App() {
           }
 
           if (typeof data.bpm === 'number' && Number.isFinite(data.bpm)) {
-            setBpm(Math.max(0, Math.round(data.bpm)));
+            setBpm(data.bpm >= 40 && data.bpm <= 180 ? Math.round(data.bpm) : 0);
           }
           if (typeof data.gsrRaw === 'number' && Number.isFinite(data.gsrRaw)) {
             if (typeof data.gsr === 'number' && Number.isFinite(data.gsr)) {
@@ -667,26 +713,30 @@ export default function App() {
       if (line.includes('호흡 세션 시작')) {
         if (!isBreathingRef.current) startBreathingSession();
       } else if (line.includes('호흡 세션 종료')) {
-        if (isBreathingRef.current) stopBreathingSession();
+        if (isBreathingRef.current) {
+          sessionEndRef.current = {bpm: bpmRef.current, gsr: gsrRef.current};
+          stopBreathingSession();
+          if (line.includes('완료')) setIsCompleted(true);
+        }
       } else if (line.includes('기준선 측정 시작')) {
         startBaselineMeasurement();
       } else if (line.includes('기준선 측정 취소') || line.includes('기준선 측정 실패')) {
         if (baselineStatusRef.current === 'measuring') cancelBaselineMeasurement();
       } else if (line.includes('기준선 저장 완료')) {
-        const baseMatch = line.match(/기준선 저장 완료:\s*(\d+)\s*BPM/);
+        const baseMatch = line.match(/기준선 저장 완료:\s*(\d+)\s*BPM\s*\/\s*GSR\s*(\d+)/);
         if (baseMatch) {
           const savedBpm = Number(baseMatch[1]);
+          const savedRaw = Number(baseMatch[2]);
           const now = new Date();
           const measuredAt = `${String(now.getHours()).padStart(2, '0')}:${String(
             now.getMinutes(),
           ).padStart(2, '0')}`;
           setBaselineResult({
             bpm: savedBpm,
-            gsr: gsrRef.current,
-            gsrRaw: gsrRawRef.current,
+            gsr: Math.round(100 - savedRaw / 4095 * 100),
+            gsrRaw: savedRaw,
             sampleCount: 60,
             measuredAt,
-            recommendedRoutine: '478',
           });
           setBaselineStatus('complete');
           sessionStartBpmRef.current = savedBpm;
@@ -734,6 +784,10 @@ export default function App() {
       serialReaderRef.current = null;
       serialPortRef.current = null;
       setDeviceLevel(null);
+      deviceReadyRef.current = false;
+      lastPatternKeyRef.current = null;
+      setDeviceReady(false);
+      setDeviceCompleted(null);
       setIsSerialConnected(false);
       showToast('XIAO ESP32-C3 연결이 해제되었습니다.');
       return;
@@ -769,6 +823,10 @@ export default function App() {
     } catch {
       serialWriterRef.current = null;
       setDeviceLevel(null);
+      deviceReadyRef.current = false;
+      lastPatternKeyRef.current = null;
+      setDeviceReady(false);
+      setDeviceCompleted(null);
       setIsSerialConnected(false);
       isSerialRef.current = false;
       showToast('USB 연결이 취소되었거나 포트를 열 수 없습니다.');
@@ -850,12 +908,13 @@ export default function App() {
         )}
 
         {activeTab === 'ai' && (
-          <AiCareTab bpm={bpm} gsr={gsr} onApplyRoutine={handleApplyAiRoutine} />
+          <AiCareTab bpm={bpm} gsr={gsr} gsrRaw={gsrRaw} baseline={baselineResult} recentSessions={logs} onApplyRoutine={handleApplyAiRoutine} />
         )}
 
         {activeTab === 'report' && (
           <ReportTab
             logs={logs}
+            deviceCompleted={deviceCompleted}
             onClearLogs={handleClearLogs}
             onGoToStudio={() => setActiveTab('studio')}
           />

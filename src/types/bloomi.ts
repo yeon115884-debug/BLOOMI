@@ -42,6 +42,8 @@ export interface WellnessSessionLog {
   gsrBefore?: number;
   gsrAfter?: number;
   mood: string;
+  situation?: 'interview' | 'study' | 'rest';
+  completed?: boolean;
 }
 
 export interface AiPrescription {
