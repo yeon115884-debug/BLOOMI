@@ -23,6 +23,13 @@
  * ── 웹에서 받는 명령 (줄바꿈으로 끝나는 글자) ──
  *    start  호흡 시작      stop   호흡 종료
  *    calib  기준선 초기화 + 30초 측정      cancel 기준선 측정 취소
+ *    pattern:초,밝기,색;초,밝기,색;...   호흡 패턴 바꾸기 (최대 6단계)
+ *        예) pattern:4,100,F4A6B8;7,15,B8B5E8;8,100,8FB996   (4-7-8 호흡)
+ *        초 = 그 단계 길이(1~30), 밝기 = 그 단계 끝에 도달할 밝기(0~100), 색 = RRGGBB(생략 가능)
+ *        각 단계 동안 "이전 단계 끝 밝기·색 → 이 단계 밝기·색"으로 서서히 변함
+ *        호흡 중에 받으면 첫 단계부터 다시 시작. 전원 끄면 기본(4-2-6 분홍)으로 돌아감
+ *    sync:단계번호,경과초      웹 화면의 현재 위치로 꽃을 맞춤 (예: sync:1,3 = 2번째 단계 3초 지점)
+ *        웹이 호흡 중 1초마다 보내서 화면과 꽃이 어긋나지 않게 함 (출력 없음)
  *    시리얼 모니터 입력창에 직접 쳐서 테스트해도 돼요.
  *
  * 필요 라이브러리: Adafruit NeoPixel  /  보드: XIAO_ESP32C3
@@ -96,7 +103,29 @@ int baseline = 0, gsrBase = 0;
 float gsrNow = 0;
 bool session = false; uint32_t sessionStart = 0;
 bool calibrating = false; uint32_t calibValidMs = 0; long calibSum = 0; int calibN = 0; double calibGsrSum = 0;
-const uint32_t T_IN = 4000, T_HOLD = 2000, T_OUT = 6000;
+// ---- 호흡 패턴 (웹이 pattern: 명령으로 바꿀 수 있음) ----
+struct Phase { uint32_t ms; uint8_t lv; uint8_t r, g, b; };
+const int MAX_PHASES = 6;
+Phase phases[MAX_PHASES] = {                       // 기본: 들숨 4초 밝아짐 → 2초 유지 → 날숨 6초 어두워짐
+  {4000, 100, 255, 90, 130}, {2000, 100, 255, 90, 130}, {6000, 10, 255, 90, 130}};
+int nPhases = 3;
+uint32_t cycleMs() { uint32_t t = 0; for (int i = 0; i < nPhases; i++) t += phases[i].ms; return t; }
+
+bool parsePattern(const char* text) {              // "4,100,F4A6B8;7,15,B8B5E8;8,100,8FB996"
+  Phase tmp[MAX_PHASES]; int n = 0;
+  char copy[160]; strncpy(copy, text, sizeof(copy) - 1); copy[sizeof(copy) - 1] = 0;
+  char* save = nullptr;
+  for (char* tok = strtok_r(copy, ";", &save); tok && n < MAX_PHASES; tok = strtok_r(nullptr, ";", &save)) {
+    int sec = 0, lv = 0; unsigned int rgb = 0xFF5A82;   // 색 생략 시 분홍
+    int got = sscanf(tok, "%d,%d,%x", &sec, &lv, &rgb);
+    if (got < 2 || sec < 1 || sec > 30 || lv < 0 || lv > 100) return false;
+    tmp[n++] = {(uint32_t)sec * 1000, (uint8_t)lv, (uint8_t)(rgb >> 16), (uint8_t)(rgb >> 8), (uint8_t)rgb};
+  }
+  if (n == 0) return false;
+  for (int i = 0; i < n; i++) phases[i] = tmp[i];
+  nPhases = n;
+  return true;
+}
 
 void startSession() {
   if (session) return;
@@ -139,7 +168,7 @@ void finishCalib() {
 
 // ---- 시리얼로 들어온 명령 (웹 or 시리얼 모니터) ----
 void readCommands() {
-  static char buf[32]; static uint8_t n = 0;
+  static char buf[160]; static uint8_t n = 0;
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\r') continue;
@@ -149,6 +178,23 @@ void readCommands() {
     else if (!strcmp(buf, "stop"))  endSession();
     else if (!strcmp(buf, "calib")) startCalib();
     else if (!strcmp(buf, "cancel")) cancelCalib();
+    else if (!strncmp(buf, "sync:", 5)) {
+      int ph = 0, el = 0;
+      if (session && sscanf(buf + 5, "%d,%d", &ph, &el) == 2 && ph >= 0 && ph < nPhases && el >= 0) {
+        uint32_t offset = 0;
+        for (int i = 0; i < ph; i++) offset += phases[i].ms;
+        offset += (uint32_t)el * 1000;
+        if (offset < cycleMs()) sessionStart = millis() - offset;
+      }
+    }
+    else if (!strncmp(buf, "pattern:", 8)) {
+      if (parsePattern(buf + 8)) {
+        if (session) sessionStart = millis();      // 호흡 중이면 첫 단계부터 다시
+        Serial.printf("# 호흡 패턴 적용: %d단계, 한 바퀴 %lu초\n", nPhases, (unsigned long)(cycleMs() / 1000));
+      } else {
+        Serial.println("# 호흡 패턴 형식 오류 (예: pattern:4,100,F4A6B8;7,15,B8B5E8;8,100,8FB996)");
+      }
+    }
   }
 }
 
@@ -205,7 +251,7 @@ void loop() {
   }
 
   // ---- 판단 + LED ----
-  char st; int hrPt = 0, gsrPt = 0, level = 0; float gsrPct = 0;
+  char st; int hrPt = 0, gsrPt = 0, level = 0, curPhase = -1; float gsrPct = 0;
   if (gsrBase > 0) gsrPct = (gsrNow - gsrBase) * 100.0f / gsrBase;
   if (calibrating) {
     st = 'C';
@@ -219,12 +265,17 @@ void loop() {
     ring.show();
   } else if (session) {
     st = 'B';
-    uint32_t t = (now - sessionStart) % (T_IN + T_HOLD + T_OUT);
-    float lv;
-    if (t < T_IN) lv = 0.1f + 0.9f * t / T_IN;
-    else if (t < T_IN + T_HOLD) lv = 1.0f;
-    else lv = 1.0f - 0.9f * (t - T_IN - T_HOLD) / T_OUT;
-    showColor(255, 90, 130, lv);
+    // 지금 몇 번째 단계인지 찾고, 이전 단계 끝 → 이번 단계 목표로 서서히 변화
+    uint32_t t = (now - sessionStart) % cycleMs();
+    int i = 0;
+    while (i < nPhases - 1 && t >= phases[i].ms) { t -= phases[i].ms; i++; }
+    const Phase& cur = phases[i];
+    const Phase& prev = phases[(i + nPhases - 1) % nPhases];
+    float p = (float)t / cur.ms;
+    float lv = (prev.lv + (cur.lv - prev.lv) * p) / 100.0f;
+    float r = prev.r + (cur.r - prev.r) * p, g = prev.g + (cur.g - prev.g) * p, b = prev.b + (cur.b - prev.b) * p;
+    curPhase = i;
+    showColor(r, g, b, lv < 0.03f ? 0.03f : lv);  // 완전히 꺼지진 않게
   } else if (bpm == 0 && nInt == 0 && now - lastBeat > 3000) {
     st = 'N'; showColor(255, 255, 255, 0.12f);
   } else if (!hrReady()) {
@@ -252,10 +303,10 @@ void loop() {
     lastSend = now;
     Serial.printf("{\"bpm\":%d,\"gsrRaw\":%d,\"base\":%d,\"gsrBase\":%d,\"gsrPct\":%.1f,"
                   "\"hrPt\":%d,\"gsrPt\":%d,\"level\":%d,\"state\":\"%c\","
-                  "\"session\":%d,\"calibrating\":%d,\"calibSec\":%d}\n",
+                  "\"session\":%d,\"calibrating\":%d,\"calibSec\":%d,\"phase\":%d}\n",
                   bpm, (int)gsrNow, baseline, gsrBase, gsrPct,
                   hrPt, gsrPt, level, st,
-                  session ? 1 : 0, calibrating ? 1 : 0, (int)(calibValidMs / 1000));
+                  session ? 1 : 0, calibrating ? 1 : 0, (int)(calibValidMs / 1000), curPhase);
   }
   delay(2);
 }
