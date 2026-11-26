@@ -39,6 +39,14 @@ interface NavigatorWithSerial extends Navigator {
 }
 
 const MAX_CYCLES = 4;
+
+// 웹 호흡 루틴 → 꽃 LED 패턴 명령
+// 각 단계: "초,밝기,색"  (꽃이 펴지는 단계 scale ≥ 1 → 밝게 100, 오므라드는 단계 → 어둡게 15)
+// 예) 4-7-8 → "pattern:4,100,F4A6B8;7,15,B8B5E8;8,100,8FB996"
+const buildPatternCommand = (key: RoutineKey) =>
+  `pattern:${ROUTINES[key].phases
+    .map((phase) => `${phase.duration},${phase.scale >= 1 ? 100 : 15},${phase.color.replace('#', '')}`)
+    .join(';')}`;
 const BASELINE_DURATION_SECONDS = 30;
 
 export default function App() {
@@ -437,6 +445,14 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [audioEnabled, cycleCount, isBreathing, phaseElapsed, phaseIndex, routineKey, showToast]);
 
+  // 루틴이 바뀌거나 막 연결됐을 때 꽃에 호흡 패턴 전송
+  // (아래 start 전송 효과보다 먼저 선언 → 같은 순간에 바뀌면 pattern → start 순서로 나감.
+  //  호흡 중에 루틴을 바꾸면 꽃도 첫 단계부터 다시 시작해 화면과 맞춰짐)
+  useEffect(() => {
+    if (!isSerialConnected) return;
+    void sendSerialCommand(buildPatternCommand(routineKey));
+  }, [isSerialConnected, routineKey, sendSerialCommand]);
+
   // 화면 호흡 상태 → 꽃 LED 동기화 (꽃 버튼으로 시작한 경우엔 꽃이 이미 같은 상태라 무시됨)
   useEffect(() => {
     if (!isSerialConnected) {
@@ -451,6 +467,13 @@ export default function App() {
     lastSentBreathingRef.current = isBreathing;
     void sendSerialCommand(isBreathing ? 'start' : 'stop');
   }, [isBreathing, isSerialConnected, sendSerialCommand]);
+
+  // 호흡 중 1초마다 화면의 현재 단계·경과 시간을 꽃에 알려 타이밍을 맞춤
+  // (일시정지 후 이어서 하기, 타이머 오차 모두 여기서 바로잡힘)
+  useEffect(() => {
+    if (!isSerialConnected || !isBreathing) return;
+    void sendSerialCommand(`sync:${phaseIndex},${phaseElapsed}`);
+  }, [isBreathing, isSerialConnected, phaseElapsed, phaseIndex, sendSerialCommand]);
 
   // 600ms biometric telemetry simulator loop
   useEffect(() => {
