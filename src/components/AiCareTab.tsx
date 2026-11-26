@@ -1,10 +1,13 @@
 import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {ArrowRight, Loader2, RotateCcw, Send, Sparkles} from 'lucide-react';
-import {ROUTINES, type AiChatMessage, type RoutineKey} from '../types/bloomi';
+import {ROUTINES, type AiChatMessage, type BaselineMeasurement, type RoutineKey, type WellnessSessionLog} from '../types/bloomi';
 
 interface AiCareTabProps {
   bpm: number;
   gsr: number;
+  gsrRaw: number;
+  baseline: BaselineMeasurement | null;
+  recentSessions: WellnessSessionLog[];
   onApplyRoutine: (routineKey: RoutineKey) => void;
 }
 
@@ -42,7 +45,9 @@ const INITIAL_WELCOME: ChatMessageWithRetry = {
 async function fetchCareWithRetry(
   payload: {
     message: string;
-    biometrics: {bpm: number; gsr: number};
+    biometrics: {bpm: number; gsr: number; gsrRaw: number};
+    baseline: BaselineMeasurement | null;
+    recentSessions: Array<{routineKey?: RoutineKey; situation?: string; completed?: boolean; mood: string}>;
     history: Array<{sender: 'user' | 'ai'; text: string}>;
   },
 ): Promise<{ok: boolean; status: number; data: Record<string, unknown> | null}> {
@@ -75,7 +80,7 @@ async function fetchCareWithRetry(
   }
 }
 
-export function AiCareTab({bpm, gsr, onApplyRoutine}: AiCareTabProps) {
+export function AiCareTab({bpm, gsr, gsrRaw, baseline, recentSessions, onApplyRoutine}: AiCareTabProps) {
   const [messages, setMessages] = useState<ChatMessageWithRetry[]>([INITIAL_WELCOME]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -111,7 +116,9 @@ export function AiCareTab({bpm, gsr, onApplyRoutine}: AiCareTabProps) {
     try {
       const {ok, status, data} = await fetchCareWithRetry({
         message: trimmed,
-        biometrics: {bpm, gsr},
+        biometrics: {bpm, gsr, gsrRaw},
+        baseline,
+        recentSessions: recentSessions.slice(0, 8).map(({routineKey, situation, completed, mood}) => ({routineKey, situation, completed, mood})),
         history: historySource
           .filter((m) => !m.isError)
           .slice(-6)

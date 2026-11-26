@@ -4,13 +4,14 @@ import type {WellnessSessionLog} from '../types/bloomi';
 
 interface ReportTabProps {
   logs: WellnessSessionLog[];
+  deviceCompleted: [number, number, number] | null;
   onClearLogs: () => void;
   onGoToStudio: () => void;
 }
 
 const WEEK_DAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;
 
-export function ReportTab({logs, onClearLogs, onGoToStudio}: ReportTabProps) {
+export function ReportTab({logs, deviceCompleted, onClearLogs, onGoToStudio}: ReportTabProps) {
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const stats = useMemo(() => {
@@ -71,8 +72,14 @@ export function ReportTab({logs, onClearLogs, onGoToStudio}: ReportTabProps) {
       () => ({beforeSum: 0, afterSum: 0, count: 0}),
     );
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - 6);
     logs.forEach((item) => {
-      const date = item.createdAt ? new Date(item.createdAt) : new Date();
+      if (!item.createdAt) return;
+      const date = new Date(item.createdAt);
+      if (date < weekStart || date.getTime() >= today.getTime() + 86400000) return;
       const jsDay = date.getDay(); // 0=Sun, 1=Mon ... 6=Sat
       const idx = jsDay === 0 ? 6 : jsDay - 1;
       buckets[idx].beforeSum += item.bpmBefore;
@@ -165,6 +172,14 @@ export function ReportTab({logs, onClearLogs, onGoToStudio}: ReportTabProps) {
 
   return (
     <section className="space-y-6">
+      {deviceCompleted && (
+        <div className="glass-card rounded-3xl p-5 shadow-soft text-sm text-charcoal">
+          키링에 저장된 완료 횟수: {deviceCompleted.reduce((sum, count) => sum + count, 0)}회
+          <span className="block text-xs text-stone-500 mt-1">
+            4-7-8 {deviceCompleted[0]}회 · 박스 {deviceCompleted[1]}회 · 5-5 {deviceCompleted[2]}회. 기기 단독 사용도 포함하며, 시각·전후 센서값이 없어 아래 웹 기록과 별도로 표시합니다.
+          </span>
+        </div>
+      )}
       {/* Top Summary KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="glass-card rounded-3xl p-5 shadow-soft">
@@ -221,7 +236,7 @@ export function ReportTab({logs, onClearLogs, onGoToStudio}: ReportTabProps) {
               주간 호흡 전·후 심박수 변화
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              호흡 세션 실행 전(분홍)과 완료 후(세이지 민트)의 요일별 평균 심박수 비교
+              최근 7일 호흡 전(분홍)과 기록 시점(세이지 민트)의 요일별 평균 심박수 비교
             </p>
           </div>
           <div className="relative w-full h-56 mt-4">

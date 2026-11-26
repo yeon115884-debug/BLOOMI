@@ -15,7 +15,10 @@ interface CareRequestBody {
   biometrics?: {
     bpm?: unknown;
     gsr?: unknown;
+    gsrRaw?: unknown;
   };
+  baseline?: {bpm?: unknown; gsrRaw?: unknown};
+  recentSessions?: Array<{routineKey?: unknown; situation?: unknown; completed?: unknown; mood?: unknown}>;
   history?: Array<{
     sender?: unknown;
     text?: unknown;
@@ -132,6 +135,21 @@ async function createApp() {
         `현재 키링 생체 측정치: 심박수 ${bpm ?? '-'} BPM, GSR 긴장도 ${gsr ?? '-'}/100`,
       );
     }
+    const baselineBpm = body.baseline?.bpm;
+    const baselineRaw = body.baseline?.gsrRaw;
+    const currentRaw = body.biometrics?.gsrRaw;
+    if (typeof baselineBpm === 'number' && baselineBpm >= 40 && baselineBpm <= 180 &&
+        typeof baselineRaw === 'number' && baselineRaw > 0 && baselineRaw <= 4095 &&
+        typeof currentRaw === 'number' && currentRaw >= 0 && currentRaw <= 4095) {
+      contextLines.push(`개인 기준선: ${baselineBpm} BPM, GSR ADC ${baselineRaw}. 현재 기준 대비 심박 ${bpm === null ? '측정 안 됨' : `${bpm - baselineBpm} BPM`}, GSR ADC 감소율 ${Math.round((baselineRaw - currentRaw) * 100 / baselineRaw)}%. 측정값만으로 심리 상태를 단정하지 마세요.`);
+    }
+    if (Array.isArray(body.recentSessions)) {
+      const labels: Record<string, string> = {interview: '면접·발표', study: '학습·업무', rest: '휴식·취침'};
+      const sessionLines = body.recentSessions.slice(0, 8).filter((item) =>
+        item && (item.routineKey === '478' || item.routineKey === 'box' || item.routineKey === 'calm')
+      ).map((item) => `${labels[String(item.situation)] ?? '상황 미기록'}: ${item.routineKey}, ${item.completed === true ? '완료' : '미완료'}, ${typeof item.mood === 'string' ? item.mood.slice(0, 30) : ''}`);
+      if (sessionLines.length) contextLines.push(`최근 호흡 사용 기록:\n${sessionLines.join('\n')}`);
+    }
     if (safeHistory.length > 0) {
       contextLines.push(
         '최근 대화 맥락:\n' +
@@ -158,6 +176,8 @@ async function createApp() {
             '- routineTitle: 선택한 루틴과 LED 색상을 담은 간결한 한국어 제목.',
             '- reason: 이 호흡 리듬이 지금 몸과 마음을 어떻게 도와주는지 생리학적/실용적 이유 1~2문장.',
             '의학적 진단이나 처방이라는 표현은 피하고, 호흡 웰니스 가이드로 안내하세요.',
+            '개인 기준선이 주어지면 현재 변화와 사용자의 설명을 함께 고려하세요. 기준선은 유효 센서 측정값으로 계산하며 임의로 바꾸지 않습니다.',
+            '최근 사용 기록이 있으면 같은 상황에서 완료하고 편안했다고 기록한 루틴을 우선 고려하세요. 데이터가 적으면 개인화 효과를 단정하지 마세요.',
           ].join('\n'),
           responseMimeType: 'application/json',
           responseSchema: {

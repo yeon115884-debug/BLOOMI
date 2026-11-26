@@ -56,7 +56,7 @@ interface StudioTabProps {
   onCancelBaseline: () => void;
   onToggleAutoStartAfterBaseline: () => void;
   onSelectRoutine: (key: RoutineKey) => void;
-  onLogSession: (mood: string) => void;
+  onLogSession: (mood: string, situation: 'interview' | 'study' | 'rest') => void;
 }
 
 const LED_COORDINATES = [
@@ -108,6 +108,7 @@ export function StudioTab({
   const hrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const gsrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [btnPressed, setBtnPressed] = useState(false);
+  const [logSituation, setLogSituation] = useState<'interview' | 'study' | 'rest'>('interview');
 
   const routine = ROUTINES[routineKey];
   const currentPhase = routine.phases[phaseIndex] ?? routine.phases[0];
@@ -650,21 +651,15 @@ export function StudioTab({
               }
 
               const bpmDelta = bpm - baselineResult.bpm;
-              const gsrDelta = gsr - baselineResult.gsr;
-              const gsrPctDelta =
-                baselineResult.gsr > 0
-                  ? Math.round(((gsr - baselineResult.gsr) / baselineResult.gsr) * 100)
-                  : 0;
-              const adcDrop = baselineResult.gsrRaw - gsrRaw;
+              const gsrPctDelta = baselineResult.gsrRaw > 0
+                ? Math.round((baselineResult.gsrRaw - gsrRaw) * 100 / baselineResult.gsrRaw) : 0;
 
               let recKey: '478' | 'box' | null = null;
               let recTitle = '호흡 추천 없음 · 기준 범위 내 안정';
               let recSub = '일정 이상의 변동 미감지';
               let recReason = `현재 기준(${baselineResult.bpm} BPM · GSR ${baselineResult.gsr}) 대비 ${
                 bpmDelta >= 0 ? '+' : ''
-              }${bpmDelta} BPM · GSR ${gsrDelta >= 0 ? '+' : ''}${gsrDelta} (${
-                gsrPctDelta >= 0 ? '+' : ''
-              }${gsrPctDelta}%)`;
+              }${bpmDelta} BPM · GSR ADC 감소 ${gsrPctDelta}%`;
               let bannerCls = 'bg-stone-50 border-stone-200/80 text-charcoal';
               let dotCls = 'bg-sage-dark';
 
@@ -675,11 +670,11 @@ export function StudioTab({
                 recReason = `초기 평균 대비 +${bpmDelta} BPM 급상승 (≥ +15 BPM)`;
                 bannerCls = 'bg-blush-light/70 border-blush/40 text-charcoal';
                 dotCls = 'bg-blush-dark';
-              } else if (bpmDelta <= 14 && (gsrDelta >= 15 || gsrPctDelta >= 15 || adcDrop >= 60)) {
+              } else if (gsrPctDelta >= 8) {
                 recKey = 'box';
                 recTitle = '4-4-4-4 박스 추천';
                 recSub = '집중력 회복·정신적 압박';
-                recReason = `심박 ${bpmDelta >= 0 ? '+' : ''}${bpmDelta} BPM (≤+14) · GSR +${gsrDelta} (+${gsrPctDelta}%, ADC -${adcDrop})`;
+                recReason = `심박 ${bpmDelta >= 0 ? '+' : ''}${bpmDelta} BPM · 기준 ADC 대비 ${gsrPctDelta}% 감소`;
                 bannerCls = 'bg-lavender-light/80 border-lavender/45 text-charcoal';
                 dotCls = 'bg-lavender-dark';
               }
@@ -714,17 +709,13 @@ export function StudioTab({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(() => {
                 const bpmDelta = baselineResult ? bpm - baselineResult.bpm : 0;
-                const gsrDelta = baselineResult ? gsr - baselineResult.gsr : 0;
-                const gsrPctDelta =
-                  baselineResult && baselineResult.gsr > 0
-                    ? Math.round(((gsr - baselineResult.gsr) / baselineResult.gsr) * 100)
-                    : 0;
-                const adcDrop = baselineResult ? baselineResult.gsrRaw - gsrRaw : 0;
+                const gsrPctDelta = baselineResult && baselineResult.gsrRaw > 0
+                  ? Math.round((baselineResult.gsrRaw - gsrRaw) * 100 / baselineResult.gsrRaw) : 0;
                 const is478Recommended = Boolean(baselineResult && bpmDelta >= 15);
                 const isBoxRecommended = Boolean(
                   baselineResult &&
                     bpmDelta <= 14 &&
-                    (gsrDelta >= 15 || gsrPctDelta >= 15 || adcDrop >= 60),
+                    gsrPctDelta >= 8,
                 );
 
                 return (
@@ -790,7 +781,7 @@ export function StudioTab({
             </div>
 
             <p className="text-[11px] text-stone-400">
-              추천 조건 (초기 30초 기준선 대비): +15 BPM↑ → 4-7-8 호흡 · +14 BPM 이하 유지 &amp; GSR +15%↑(ADC 60↓) → 4-4-4-4 박스
+              추천 조건 (초기 30초 기준선 대비): +15 BPM↑ → 4-7-8 호흡 · 그 외 GSR ADC 8% 이상 감소 → 4-4-4-4 박스
             </p>
           </div>
 
@@ -870,23 +861,28 @@ export function StudioTab({
               </p>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
+              <select aria-label="호흡한 상황" value={logSituation} onChange={(event) => setLogSituation(event.target.value as 'interview' | 'study' | 'rest')} className="px-3 py-2 rounded-xl text-xs border border-stone-200 bg-white">
+                <option value="interview">면접·발표 전</option>
+                <option value="study">학습·업무 중</option>
+                <option value="rest">휴식·취침 전</option>
+              </select>
               <button
                 type="button"
-                onClick={() => onLogSession('긴장완화 😌')}
+                onClick={() => onLogSession('긴장완화 😌', logSituation)}
                 className="px-3 py-2 rounded-xl text-xs font-semibold bg-sage-light hover:bg-sage text-sage-dark hover:text-white transition-all whitespace-nowrap cursor-pointer"
               >
                 😌 한결 차분해짐
               </button>
               <button
                 type="button"
-                onClick={() => onLogSession('집중회복 💡')}
+                onClick={() => onLogSession('집중회복 💡', logSituation)}
                 className="px-3 py-2 rounded-xl text-xs font-semibold bg-lavender-light hover:bg-lavender text-lavender-dark hover:text-white transition-all whitespace-nowrap cursor-pointer"
               >
                 💡 머리가 맑아짐
               </button>
               <button
                 type="button"
-                onClick={() => onLogSession('여전히떨림 💓')}
+                onClick={() => onLogSession('여전히떨림 💓', logSituation)}
                 className="px-3 py-2 rounded-xl text-xs font-semibold bg-blush-light hover:bg-blush text-blush-dark hover:text-white transition-all whitespace-nowrap cursor-pointer"
               >
                 💓 조금 더 필요함
